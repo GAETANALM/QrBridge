@@ -1,0 +1,6 @@
+{
+  "name": "QR Drive",
+  "description": "Un outil de partage de fichiers rapide et sécurisé par QR code",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
