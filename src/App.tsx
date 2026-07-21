@@ -7,7 +7,7 @@ import QRCodeDialog from "./components/QRCodeDialog";
 import SharePage from "./components/SharePage";
 import AuthPage from "./components/AuthPage";
 import AdminUsersTab from "./components/AdminUsersTab";
-import { FileMetadata, AppRoute, User } from "./types";
+import { FileMetadata, AppRoute, User, getApiUrl } from "./types";
 
 export default function App() {
   const [route, setRoute] = useState<AppRoute>({ type: "admin" });
@@ -86,7 +86,7 @@ export default function App() {
 
     if (savedToken) {
       try {
-        await fetch("/api/auth/logout", {
+        await fetch(getApiUrl("/api/auth/logout"), {
           method: "POST",
           headers: {
             "Authorization": `Bearer ${savedToken}`
@@ -104,7 +104,7 @@ export default function App() {
     setIsLoading(true);
     setError(null);
     try {
-      const response = await fetch("/api/files", {
+      const response = await fetch(getApiUrl("/api/files"), {
         headers: {
           "Authorization": `Bearer ${token}`
         }
@@ -142,7 +142,7 @@ export default function App() {
   const handleDeleteFile = async (id: string) => {
     if (window.confirm("Êtes-vous sûr de vouloir supprimer définitivement ce fichier ?")) {
       try {
-        const response = await fetch(`/api/files/${id}`, {
+        const response = await fetch(getApiUrl(`/api/files/${id}`), {
           method: "DELETE",
           headers: {
             "Authorization": `Bearer ${token}`

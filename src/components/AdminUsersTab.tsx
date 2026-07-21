@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { User, Shield, User as UserIcon, Trash2, Calendar, Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import { getApiUrl } from "../types";
 
 interface AdminUsersTabProps {
   currentUser: { id: string; prenom: string; nom: string; role: 'admin' | 'user' } | null;
@@ -26,7 +27,7 @@ export default function AdminUsersTab({ currentUser }: AdminUsersTabProps) {
     setError(null);
     try {
       const token = localStorage.getItem("qr_drive_token");
-      const response = await fetch("/api/admin/users", {
+      const response = await fetch(getApiUrl("/api/admin/users"), {
         headers: {
           ...(token ? { "Authorization": `Bearer ${token}` } : {})
         }
@@ -63,7 +64,7 @@ export default function AdminUsersTab({ currentUser }: AdminUsersTabProps) {
 
     try {
       const token = localStorage.getItem("qr_drive_token");
-      const response = await fetch(`/api/admin/users/${userId}/role`, {
+      const response = await fetch(getApiUrl(`/api/admin/users/${userId}/role`), {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
@@ -105,7 +106,7 @@ export default function AdminUsersTab({ currentUser }: AdminUsersTabProps) {
 
     try {
       const token = localStorage.getItem("qr_drive_token");
-      const response = await fetch(`/api/admin/users/${userId}`, {
+      const response = await fetch(getApiUrl(`/api/admin/users/${userId}`), {
         method: "DELETE",
         headers: {
           ...(token ? { "Authorization": `Bearer ${token}` } : {})

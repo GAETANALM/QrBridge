@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { User as UserIcon, Lock, LogIn, UserPlus, AlertCircle, Eye, EyeOff, ShieldCheck, Heart, Hash } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { User } from "../types";
+import { User, getApiUrl } from "../types";
 
 interface AuthPageProps {
   onAuthSuccess: (user: User, token: string) => void;
@@ -47,7 +47,7 @@ export default function AuthPage({ onAuthSuccess }: AuthPageProps) {
 
     try {
       const endpoint = mode === 'login' ? '/api/auth/login' : '/api/auth/register';
-      const response = await fetch(endpoint, {
+      const response = await fetch(getApiUrl(endpoint), {
         method: "POST",
         headers: {
           "Content-Type": "application/json"

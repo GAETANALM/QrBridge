@@ -1,7 +1,7 @@
 import React, { useState, useRef } from "react";
 import { Upload, Loader2, AlertCircle, FileUp, Clock, Calendar } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { FileMetadata } from "../types";
+import { FileMetadata, getApiUrl } from "../types";
 
 interface FileUploaderProps {
   onUploadSuccess: (file: FileMetadata) => void;
@@ -96,7 +96,7 @@ export default function FileUploader({ onUploadSuccess }: FileUploaderProps) {
 
       try {
         const token = localStorage.getItem("qr_drive_token");
-        const response = await fetch("/api/upload", {
+        const response = await fetch(getApiUrl("/api/upload"), {
           method: "POST",
           headers: {
             "Content-Type": "application/json",

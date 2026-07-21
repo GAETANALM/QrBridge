@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Download, FileText, ImageIcon, Music, Video, File, AlertCircle, Loader2, ArrowLeft, Heart } from "lucide-react";
 import { motion } from "motion/react";
-import { FileMetadata } from "../types";
+import { FileMetadata, getApiUrl } from "../types";
 
 interface SharePageProps {
   fileId: string;
@@ -16,7 +16,7 @@ export default function SharePage({ fileId, onGoToHome }: SharePageProps) {
   useEffect(() => {
     async function fetchFileMetadata() {
       try {
-        const response = await fetch(`/api/files/${fileId}`);
+        const response = await fetch(getApiUrl(`/api/files/${fileId}`));
         if (!response.ok) {
           if (response.status === 410) {
             const errData = await response.json();
@@ -83,7 +83,7 @@ export default function SharePage({ fileId, onGoToHome }: SharePageProps) {
   const handleDownload = () => {
     if (file && error !== "expired") {
       // Trigger native browser download directly via the dedicated API endpoint
-      window.location.href = `/api/download/${file.id}`;
+      window.location.href = getApiUrl(`/api/download/${file.id}`);
       // Increment download count locally for visual feel
       setFile((prev) => (prev ? { ...prev, downloads: prev.downloads + 1 } : null));
     }
