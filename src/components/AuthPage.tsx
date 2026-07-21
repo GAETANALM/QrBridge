@@ -59,7 +59,14 @@ export default function AuthPage({ onAuthSuccess }: AuthPageProps) {
         })
       });
 
-      const data = await response.json();
+      let data: any = {};
+      const contentType = response.headers.get("content-type");
+      if (contentType && contentType.includes("application/json")) {
+        data = await response.json();
+      } else {
+        const textStr = await response.text();
+        throw new Error(textStr || `Erreur de communication avec le serveur (${response.status})`);
+      }
 
       if (!response.ok) {
         throw new Error(data.error || "Une erreur s'est produite lors de l'authentification.");

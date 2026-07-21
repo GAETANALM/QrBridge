@@ -65,40 +65,55 @@ async function loadUsers(): Promise<any[]> {
   try {
     const data = await fs.promises.readFile(USERS_FILE, "utf-8");
     const parsed = JSON.parse(data);
-    // Migration check: if users have "email" but no "prenom", replace/migrate
-    if (parsed.length > 0 && ("email" in parsed[0] && !("prenom" in parsed[0]))) {
-      console.log("Migrating users.json to prenom/nom schema");
+    
+    // Comprehensive check: if ANY user is missing prenom or nom, trigger migration
+    let needsMigration = false;
+    if (Array.isArray(parsed)) {
+      for (const u of parsed) {
+        if (!u || !u.prenom || !u.nom) {
+          needsMigration = true;
+          break;
+        }
+      }
+    } else {
+      // If parsed is not an array, recreate users file
+      await fs.promises.writeFile(USERS_FILE, JSON.stringify(defaultUsers, null, 2));
+      return defaultUsers;
+    }
+
+    if (needsMigration) {
+      console.log("Migrating users.json to prenom/nom schema for all records");
       const migrated = parsed.map((u: any) => {
+        if (!u) return null;
+        if (u.prenom && u.nom) {
+          return u; // Already fully migrated
+        }
+
+        let prenom = "Utilisateur";
+        let nom = "Standard";
+
         if (u.id === "admin-id" || u.email === "admin@qrdrive.com") {
-          return {
-            id: u.id,
-            prenom: "Admin",
-            nom: "Admin",
-            password: hashPassword("111111"),
-            role: "admin",
-            createdAt: u.createdAt || new Date().toISOString()
-          };
+          prenom = "Admin";
+          nom = "Admin";
+        } else if (u.id === "user-id" || u.email === "user@qrdrive.com") {
+          prenom = "Utilisateur";
+          nom = "Standard";
+        } else if (u.email) {
+          const namePart = u.email.split("@")[0] || "utilisateur";
+          prenom = namePart.charAt(0).toUpperCase() + namePart.slice(1);
+          nom = "Standard";
         }
-        if (u.id === "user-id" || u.email === "user@qrdrive.com") {
-          return {
-            id: u.id,
-            prenom: "Utilisateur",
-            nom: "Standard",
-            password: hashPassword("111111"),
-            role: "user",
-            createdAt: u.createdAt || new Date().toISOString()
-          };
-        }
-        const namePart = u.email.split("@")[0] || "utilisateur";
+
         return {
-          id: u.id,
-          prenom: namePart.charAt(0).toUpperCase() + namePart.slice(1),
-          nom: "Standard",
-          password: hashPassword("111111"),
+          id: u.id || "u_" + generateShortId(),
+          prenom: u.prenom || prenom,
+          nom: u.nom || nom,
+          password: u.password || hashPassword("111111"),
           role: u.role || "user",
           createdAt: u.createdAt || new Date().toISOString()
         };
-      });
+      }).filter(Boolean);
+
       await fs.promises.writeFile(USERS_FILE, JSON.stringify(migrated, null, 2));
       return migrated;
     }
@@ -164,7 +179,7 @@ app.post("/api/auth/register", async (req, res) => {
     const nomLower = trimmedNom.toLowerCase();
     const users = await loadUsers();
 
-    if (users.find(u => u.prenom.toLowerCase() === prenomLower && u.nom.toLowerCase() === nomLower)) {
+    if (users.find(u => u.prenom?.toLowerCase() === prenomLower && u.nom?.toLowerCase() === nomLower)) {
       return res.status(400).json({ error: "Un compte avec ce prénom et ce nom existe déjà." });
     }
 
@@ -219,7 +234,7 @@ app.post("/api/auth/login", async (req, res) => {
     const prenomLower = trimmedPrenom.toLowerCase();
     const nomLower = trimmedNom.toLowerCase();
     const users = await loadUsers();
-    const user = users.find(u => u.prenom.toLowerCase() === prenomLower && u.nom.toLowerCase() === nomLower);
+    const user = users.find(u => u.prenom?.toLowerCase() === prenomLower && u.nom?.toLowerCase() === nomLower);
 
     if (!user || user.password !== hashPassword(password)) {
       return res.status(401).json({ error: "Identifiants incorrects (Prénom/Nom ou Code erroné)." });
