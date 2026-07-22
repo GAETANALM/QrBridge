@@ -4,13 +4,12 @@ import { motion, AnimatePresence } from "motion/react";
 import { getApiUrl } from "../types";
 
 interface AdminUsersTabProps {
-  currentUser: { id: string; prenom: string; nom: string; role: 'admin' | 'user' } | null;
+  currentUser: { id: string; username: string; role: 'admin' | 'user' } | null;
 }
 
 interface UserData {
   id: string;
-  prenom: string;
-  nom: string;
+  username: string;
   role: 'admin' | 'user';
   createdAt: string;
 }
@@ -210,7 +209,7 @@ export default function AdminUsersTab({ currentUser }: AdminUsersTabProps) {
               {users.map((u) => {
                 const isSelf = u.id === currentUser?.id;
                 const isActing = actionUserId === u.id;
-                const fullName = `${u.prenom} ${u.nom}`;
+                const fullName = u.username || 'utilisateur';
 
                 return (
                   <tr key={u.id} className="text-xs hover:bg-slate-900/30 transition-colors">

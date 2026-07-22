@@ -9,8 +9,7 @@ interface AuthPageProps {
 
 export default function AuthPage({ onAuthSuccess }: AuthPageProps) {
   const [mode, setMode] = useState<'login' | 'register'>('login');
-  const [prenom, setPrenom] = useState('');
-  const [nom, setNom] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('111111'); // prefill default 6-digit passcode
   const [confirmPassword, setConfirmPassword] = useState('111111');
   const [showPassword, setShowPassword] = useState(false);
@@ -28,7 +27,7 @@ export default function AuthPage({ onAuthSuccess }: AuthPageProps) {
     e.preventDefault();
     setError(null);
 
-    if (!prenom.trim() || !nom.trim() || !password) {
+    if (!username.trim() || !password) {
       setError("Veuillez remplir tous les champs.");
       return;
     }
@@ -53,8 +52,7 @@ export default function AuthPage({ onAuthSuccess }: AuthPageProps) {
           "Content-Type": "application/json"
         },
         body: JSON.stringify({ 
-          prenom: prenom.trim(), 
-          nom: nom.trim(), 
+          username: username.trim(), 
           password 
         })
       });
@@ -120,50 +118,29 @@ export default function AuthPage({ onAuthSuccess }: AuthPageProps) {
             </h1>
             <p className="text-xs text-slate-400 mt-2">
               {mode === 'login' 
-                ? "Entrez votre prénom, votre nom et votre code secret pour vous connecter" 
-                : "Inscrivez-vous simplement avec votre prénom et nom"
+                ? "Entrez votre identifiant et votre code secret à 6 chiffres pour vous connecter" 
+                : "Inscrivez-vous simplement avec l'identifiant de votre choix"
               }
             </p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             
-            {/* First Name & Last Name in same row or block */}
-            <div className="grid grid-cols-2 gap-3">
-              {/* First Name Field */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-300">Prénom</label>
-                <div className="relative">
-                  <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-500 pointer-events-none">
-                    <UserIcon className="h-4 w-4" />
-                  </span>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Jean"
-                    value={prenom}
-                    onChange={(e) => setPrenom(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500/50 rounded-xl pl-10 pr-4 py-3 text-sm text-slate-200 placeholder-slate-600 focus:outline-none transition-colors"
-                  />
-                </div>
-              </div>
-
-              {/* Last Name Field */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-300">Nom</label>
-                <div className="relative">
-                  <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-500 pointer-events-none">
-                    <UserIcon className="h-4 w-4" />
-                  </span>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Dupont"
-                    value={nom}
-                    onChange={(e) => setNom(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500/50 rounded-xl pl-10 pr-4 py-3 text-sm text-slate-200 placeholder-slate-600 focus:outline-none transition-colors"
-                  />
-                </div>
+            {/* Identifiant Field */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-slate-300">Identifiant</label>
+              <div className="relative">
+                <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-500 pointer-events-none">
+                  <UserIcon className="h-4 w-4" />
+                </span>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ex: jean_dupont"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500/50 rounded-xl pl-10 pr-4 py-3 text-sm text-slate-200 placeholder-slate-600 focus:outline-none transition-colors"
+                />
               </div>
             </div>
 
@@ -288,18 +265,34 @@ export default function AuthPage({ onAuthSuccess }: AuthPageProps) {
             transition={{ delay: 0.1 }}
             className="mt-6 bg-slate-900/30 border border-slate-800/40 rounded-2xl p-4 text-center max-w-sm mx-auto"
           >
-            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Comptes d'essai pré-configurés</p>
+            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Comptes d'essai pré-configurés (Cliquer pour remplir)</p>
             <div className="grid grid-cols-2 gap-3 text-left">
-              <div className="bg-slate-950/60 p-2 rounded-xl border border-slate-850">
+              <button
+                type="button"
+                onClick={() => {
+                  setUsername("admin");
+                  setPassword("111111");
+                  setError(null);
+                }}
+                className="bg-slate-950/60 hover:bg-slate-950/90 hover:border-emerald-500/30 p-2.5 rounded-xl border border-slate-850 text-left transition-all cursor-pointer focus:outline-none w-full"
+              >
                 <p className="text-[10px] font-bold text-emerald-400">Administrateur</p>
-                <p className="text-xs font-semibold text-slate-200">Admin Admin</p>
-                <p className="text-[10px] text-slate-500 mt-1">Code: <span className="font-mono text-slate-300 select-all font-bold">111111</span></p>
-              </div>
-              <div className="bg-slate-950/60 p-2 rounded-xl border border-slate-850">
-                <p className="text-[10px] font-bold text-slate-400">Utilisateur Standard</p>
-                <p className="text-xs font-semibold text-slate-200">Utilisateur Standard</p>
-                <p className="text-[10px] text-slate-500 mt-1 font-medium">Code: <span className="font-mono text-slate-300 select-all font-bold">111111</span></p>
-              </div>
+                <p className="text-xs font-semibold text-slate-200 font-mono">admin</p>
+                <p className="text-[10px] text-slate-500 mt-1">Code: <span className="font-mono text-slate-300 font-bold">111111</span></p>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setUsername("user");
+                  setPassword("111111");
+                  setError(null);
+                }}
+                className="bg-slate-950/60 hover:bg-slate-950/90 hover:border-slate-500/30 p-2.5 rounded-xl border border-slate-850 text-left transition-all cursor-pointer focus:outline-none w-full"
+              >
+                <p className="text-[10px] font-bold text-slate-400">Utilisateur</p>
+                <p className="text-xs font-semibold text-slate-200 font-mono">user</p>
+                <p className="text-[10px] text-slate-500 mt-1 font-medium">Code: <span className="font-mono text-slate-300 font-bold">111111</span></p>
+              </button>
             </div>
           </motion.div>
         )}

@@ -32,7 +32,7 @@ const USERS_FILE = path.join(UPLOADS_DIR, "users.json");
 const PASSWORD_SALT = "qrdrive-secret-salt-2026";
 
 // Session storage in memory (token -> user info)
-const SESSIONS = new Map<string, { id: string; prenom: string; nom: string; role: 'admin' | 'user' }>();
+const SESSIONS = new Map<string, { id: string; username: string; role: 'admin' | 'user' }>();
 
 function hashPassword(password: string): string {
   return crypto.createHmac("sha256", PASSWORD_SALT).update(password).digest("hex");
@@ -42,16 +42,14 @@ async function loadUsers(): Promise<any[]> {
   const defaultUsers = [
     {
       id: "admin-id",
-      prenom: "Admin",
-      nom: "Admin",
+      username: "admin",
       password: hashPassword("111111"),
       role: "admin",
       createdAt: new Date().toISOString()
     },
     {
       id: "user-id",
-      prenom: "Utilisateur",
-      nom: "Standard",
+      username: "user",
       password: hashPassword("111111"),
       role: "user",
       createdAt: new Date().toISOString()
@@ -66,48 +64,48 @@ async function loadUsers(): Promise<any[]> {
     const data = await fs.promises.readFile(USERS_FILE, "utf-8");
     const parsed = JSON.parse(data);
     
-    // Comprehensive check: if ANY user is missing prenom or nom, trigger migration
+    // Check if any user is missing "username" (needs migration to username schema)
     let needsMigration = false;
     if (Array.isArray(parsed)) {
       for (const u of parsed) {
-        if (!u || !u.prenom || !u.nom) {
+        if (!u || !u.username) {
           needsMigration = true;
           break;
         }
       }
     } else {
-      // If parsed is not an array, recreate users file
       await fs.promises.writeFile(USERS_FILE, JSON.stringify(defaultUsers, null, 2));
       return defaultUsers;
     }
 
     if (needsMigration) {
-      console.log("Migrating users.json to prenom/nom schema for all records");
+      console.log("Migrating users.json to single username schema");
       const migrated = parsed.map((u: any) => {
         if (!u) return null;
-        if (u.prenom && u.nom) {
-          return u; // Already fully migrated
+        if (u.username) {
+          return u;
         }
 
-        let prenom = "Utilisateur";
-        let nom = "Standard";
+        let username = "utilisateur";
+        if (u.prenom && u.nom) {
+          username = `${u.prenom.trim()}${u.nom.trim()}`.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        } else if (u.prenom) {
+          username = u.prenom.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        } else if (u.id === "admin-id" || u.role === "admin") {
+          username = "admin";
+        } else if (u.id === "user-id") {
+          username = "user";
+        }
 
-        if (u.id === "admin-id" || u.email === "admin@qrdrive.com") {
-          prenom = "Admin";
-          nom = "Admin";
-        } else if (u.id === "user-id" || u.email === "user@qrdrive.com") {
-          prenom = "Utilisateur";
-          nom = "Standard";
-        } else if (u.email) {
-          const namePart = u.email.split("@")[0] || "utilisateur";
-          prenom = namePart.charAt(0).toUpperCase() + namePart.slice(1);
-          nom = "Standard";
+        // Strip any special characters from username
+        username = username.replace(/[^a-zA-Z0-9_\-]/g, "");
+        if (!username) {
+          username = "user_" + generateShortId();
         }
 
         return {
           id: u.id || "u_" + generateShortId(),
-          prenom: u.prenom || prenom,
-          nom: u.nom || nom,
+          username: username,
           password: u.password || hashPassword("111111"),
           role: u.role || "user",
           createdAt: u.createdAt || new Date().toISOString()
@@ -120,7 +118,7 @@ async function loadUsers(): Promise<any[]> {
     return parsed;
   } catch (error) {
     console.error("Error loading users:", error);
-    return [];
+    return defaultUsers;
   }
 }
 
@@ -161,32 +159,42 @@ async function requireAdmin(req: any, res: any, next: any) {
 // 1. Register a new user
 app.post("/api/auth/register", async (req, res) => {
   try {
-    const { prenom, nom, password } = req.body;
+    const { username, password } = req.body;
 
-    if (!prenom || !nom) {
-      return res.status(400).json({ error: "Le prénom et le nom sont requis." });
+    if (!username) {
+      return res.status(400).json({ error: "L'identifiant est requis." });
     }
 
-    const trimmedPrenom = prenom.trim();
-    const trimmedNom = nom.trim();
+    const trimmedUsername = username.trim();
     const passCode = password || "111111";
 
     if (!/^\d{6}$/.test(passCode)) {
       return res.status(400).json({ error: "Le mot de passe doit être un code à 6 chiffres." });
     }
 
-    const prenomLower = trimmedPrenom.toLowerCase();
-    const nomLower = trimmedNom.toLowerCase();
+    const cleanSearch = (str: string) => {
+      if (!str) return "";
+      return str.trim()
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-zA-Z0-9_\-]/g, "");
+    };
+
+    const usernameLower = cleanSearch(trimmedUsername);
+    if (!usernameLower) {
+      return res.status(400).json({ error: "L'identifiant doit contenir au moins quelques lettres ou chiffres." });
+    }
+
     const users = await loadUsers();
 
-    if (users.find(u => u.prenom?.toLowerCase() === prenomLower && u.nom?.toLowerCase() === nomLower)) {
-      return res.status(400).json({ error: "Un compte avec ce prénom et ce nom existe déjà." });
+    if (users.find(u => u.username && cleanSearch(u.username) === usernameLower)) {
+      return res.status(400).json({ error: "Cet identifiant est déjà utilisé." });
     }
 
     const newUser = {
       id: "u_" + generateShortId(),
-      prenom: trimmedPrenom,
-      nom: trimmedNom,
+      username: trimmedUsername,
       password: hashPassword(passCode),
       role: "user",
       createdAt: new Date().toISOString()
@@ -196,15 +204,14 @@ app.post("/api/auth/register", async (req, res) => {
     await saveUsers(users);
 
     const token = crypto.randomBytes(32).toString("hex");
-    const userSession = { id: newUser.id, prenom: newUser.prenom, nom: newUser.nom, role: newUser.role as 'admin' | 'user' };
+    const userSession = { id: newUser.id, username: newUser.username, role: newUser.role as 'admin' | 'user' };
     SESSIONS.set(token, userSession);
 
     res.status(201).json({
       token,
       user: {
         id: newUser.id,
-        prenom: newUser.prenom,
-        nom: newUser.nom,
+        username: newUser.username,
         role: newUser.role,
         createdAt: newUser.createdAt
       }
@@ -218,38 +225,47 @@ app.post("/api/auth/register", async (req, res) => {
 // 2. Login
 app.post("/api/auth/login", async (req, res) => {
   try {
-    const { prenom, nom, password } = req.body;
+    const { username, password } = req.body;
 
-    if (!prenom || !nom || !password) {
-      return res.status(400).json({ error: "Le prénom, le nom et le code à 6 chiffres sont requis." });
+    if (!username || !password) {
+      return res.status(400).json({ error: "L'identifiant et le code à 6 chiffres sont requis." });
     }
 
-    const trimmedPrenom = prenom.trim();
-    const trimmedNom = nom.trim();
+    const trimmedUsername = username.trim();
 
     if (!/^\d{6}$/.test(password)) {
       return res.status(400).json({ error: "Le mot de passe doit être un code à 6 chiffres." });
     }
 
-    const prenomLower = trimmedPrenom.toLowerCase();
-    const nomLower = trimmedNom.toLowerCase();
+    const cleanSearch = (str: string) => {
+      if (!str) return "";
+      return str.trim()
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-zA-Z0-9_\-]/g, "");
+    };
+
+    const searchInput = cleanSearch(trimmedUsername);
     const users = await loadUsers();
-    const user = users.find(u => u.prenom?.toLowerCase() === prenomLower && u.nom?.toLowerCase() === nomLower);
+    const user = users.find(u => {
+      if (!u.username) return false;
+      return cleanSearch(u.username) === searchInput;
+    });
 
     if (!user || user.password !== hashPassword(password)) {
-      return res.status(401).json({ error: "Identifiants incorrects (Prénom/Nom ou Code erroné)." });
+      return res.status(401).json({ error: "Identifiants incorrects (Identifiant ou Code erroné)." });
     }
 
     const token = crypto.randomBytes(32).toString("hex");
-    const userSession = { id: user.id, prenom: user.prenom, nom: user.nom, role: user.role as 'admin' | 'user' };
+    const userSession = { id: user.id, username: user.username, role: user.role as 'admin' | 'user' };
     SESSIONS.set(token, userSession);
 
     res.json({
       token,
       user: {
         id: user.id,
-        prenom: user.prenom,
-        nom: user.nom,
+        username: user.username,
         role: user.role,
         createdAt: user.createdAt
       }
@@ -285,8 +301,7 @@ app.get("/api/admin/users", authenticateToken, requireAdmin, async (req, res) =>
     // Return users without passwords
     const safeUsers = users.map(u => ({
       id: u.id,
-      prenom: u.prenom,
-      nom: u.nom,
+      username: u.username || `${u.prenom || ''} ${u.nom || ''}`.trim() || 'utilisateur',
       role: u.role,
       createdAt: u.createdAt
     }));
@@ -331,8 +346,7 @@ app.patch("/api/admin/users/:id/role", authenticateToken, requireAdmin, async (r
 
     res.json({
       id,
-      prenom: users[userIndex].prenom,
-      nom: users[userIndex].nom,
+      username: users[userIndex].username || `${users[userIndex].prenom || ''} ${users[userIndex].nom || ''}`.trim(),
       role: users[userIndex].role,
       createdAt: users[userIndex].createdAt
     });
@@ -404,8 +418,7 @@ app.post("/api/upload", authenticateToken, async (req: any, res) => {
       downloads: 0,
       expiresAt: expiresAt || null,
       ownerId: req.user.id,
-      ownerPrenom: req.user.prenom,
-      ownerNom: req.user.nom,
+      ownerUsername: req.user.username || 'utilisateur',
     };
 
     // Save binary data and metadata

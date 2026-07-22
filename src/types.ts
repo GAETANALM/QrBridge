@@ -7,14 +7,12 @@ export interface FileMetadata {
   downloads: number;
   expiresAt?: string | null;
   ownerId?: string;
-  ownerPrenom?: string;
-  ownerNom?: string;
+  ownerUsername?: string;
 }
 
 export interface User {
   id: string;
-  prenom: string;
-  nom: string;
+  username: string;
   role: 'admin' | 'user';
   createdAt: string;
 }

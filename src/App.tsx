@@ -23,23 +23,38 @@ export default function App() {
   const [isAuthChecking, setIsAuthChecking] = useState(true);
   const [activeTab, setActiveTab] = useState<'files' | 'users'>('files');
 
-  // Load auth state on mount
+  // Load and verify auth state on mount
   useEffect(() => {
-    const savedToken = localStorage.getItem("qr_drive_token");
-    const savedUserStr = localStorage.getItem("qr_drive_user");
-    
-    if (savedToken && savedUserStr) {
-      try {
-        const savedUser = JSON.parse(savedUserStr);
-        setUser(savedUser);
-        setToken(savedToken);
-      } catch (err) {
-        console.error("Failed to parse saved user:", err);
-        localStorage.removeItem("qr_drive_token");
-        localStorage.removeItem("qr_drive_user");
+    async function checkExistingSession() {
+      const savedToken = localStorage.getItem("qr_drive_token");
+      const savedUserStr = localStorage.getItem("qr_drive_user");
+      
+      if (savedToken && savedUserStr) {
+        try {
+          const res = await fetch(getApiUrl("/api/auth/me"), {
+            headers: {
+              "Authorization": `Bearer ${savedToken}`
+            }
+          });
+          if (res.ok) {
+            const data = await res.json();
+            setUser(data.user);
+            setToken(savedToken);
+            localStorage.setItem("qr_drive_user", JSON.stringify(data.user));
+          } else {
+            localStorage.removeItem("qr_drive_token");
+            localStorage.removeItem("qr_drive_user");
+          }
+        } catch (err) {
+          console.error("Session verification failed:", err);
+          localStorage.removeItem("qr_drive_token");
+          localStorage.removeItem("qr_drive_user");
+        }
       }
+      setIsAuthChecking(false);
     }
-    setIsAuthChecking(false);
+
+    checkExistingSession();
   }, []);
 
   // Client-side Router setup
@@ -80,6 +95,7 @@ export default function App() {
     const savedToken = localStorage.getItem("qr_drive_token") || token;
     setUser(null);
     setToken(null);
+    setError(null);
     localStorage.removeItem("qr_drive_token");
     localStorage.removeItem("qr_drive_user");
     setActiveTab("files");
@@ -112,7 +128,7 @@ export default function App() {
       if (!response.ok) {
         if (response.status === 411 || response.status === 401) {
           handleLogout();
-          throw new Error("Votre session a expiré. Veuillez vous reconnecter.");
+          return;
         }
         throw new Error("Impossible de récupérer la liste des fichiers.");
       }
@@ -225,7 +241,7 @@ export default function App() {
             <div className="bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 flex items-center space-x-3 text-xs">
               <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
               <div className="text-left">
-                <p className="font-semibold text-slate-300 truncate max-w-[150px]">{user.prenom} {user.nom}</p>
+                <p className="font-semibold text-slate-300 truncate max-w-[150px]">{user.username}</p>
                 <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider flex items-center gap-1">
                   {user.role === "admin" ? (
                     <>
