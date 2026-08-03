@@ -11,6 +11,8 @@ import {
   clientResetUserPassword,
   clientUploadFile,
   clientGetFiles,
+  clientGetAllLocalFilesForSync,
+  clientDeleteFileDirect,
   clientGetFileMetadata,
   clientGetFileContent,
   clientDeleteFile,
@@ -196,28 +198,27 @@ export async function apiUploadFile(
  */
 export async function syncLocalFilesToServer(token: string): Promise<number> {
   try {
-    const localFiles = await clientGetFiles(token);
+    const localFiles = await clientGetAllLocalFilesForSync();
     if (!localFiles || localFiles.length === 0) return 0;
 
     let syncedCount = 0;
-    for (const fileMeta of localFiles) {
+    for (const fileRecord of localFiles) {
       try {
-        const fileData = await clientGetFileContent(fileMeta.id);
-        if (fileData.status === 200 && fileData.record && fileData.record.content) {
+        if (fileRecord.content) {
           await apiUploadFile(token, {
-            name: fileMeta.name,
-            type: fileMeta.type,
-            size: fileMeta.size,
-            content: fileData.record.content,
-            expiresAt: fileMeta.expiresAt,
-            message: fileMeta.message,
+            name: fileRecord.name,
+            type: fileRecord.type,
+            size: fileRecord.size,
+            content: fileRecord.content,
+            expiresAt: fileRecord.expiresAt,
+            message: fileRecord.message,
           });
-          // Remove from local storage once synced to central server
-          await clientDeleteFile(token, fileMeta.id, true);
+          // Remove from local IndexedDB once successfully uploaded to central server
+          await clientDeleteFileDirect(fileRecord.id);
           syncedCount++;
         }
       } catch (e) {
-        console.error(`Erreur de synchronisation locale pour ${fileMeta.name}:`, e);
+        console.error(`Erreur de synchronisation locale pour ${fileRecord.name}:`, e);
       }
     }
     return syncedCount;

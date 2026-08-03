@@ -184,22 +184,32 @@ export async function clientRegister(usernameInput: string, passwordInput: strin
 export async function clientGetMe(token: string): Promise<User> {
   const sessions = getStoredSessions();
   const session = sessions.find((s) => s.token === token);
-  if (!session) {
-    throw new Error("Session invalide ou expirée.");
+  if (session) {
+    const users = getStoredUsers();
+    const foundUser = users.find((u) => u.id === session.userId);
+    if (foundUser) {
+      return {
+        id: foundUser.id,
+        username: foundUser.username,
+        role: foundUser.role,
+        createdAt: foundUser.createdAt,
+      };
+    }
   }
 
-  const users = getStoredUsers();
-  const foundUser = users.find((u) => u.id === session.userId);
-  if (!foundUser) {
-    throw new Error("Utilisateur introuvable.");
+  // Fallback to active logged in server user stored in localStorage
+  const savedToken = localStorage.getItem("qr_drive_token");
+  const savedUser = localStorage.getItem("qr_drive_user");
+  if (savedToken && savedToken === token && savedUser) {
+    try {
+      const parsed = JSON.parse(savedUser);
+      if (parsed && parsed.id && parsed.username) {
+        return parsed as User;
+      }
+    } catch {}
   }
 
-  return {
-    id: foundUser.id,
-    username: foundUser.username,
-    role: foundUser.role,
-    createdAt: foundUser.createdAt,
-  };
+  throw new Error("Session invalide ou expirée.");
 }
 
 export async function clientLogout(token: string): Promise<void> {
@@ -411,6 +421,35 @@ export async function clientGetFiles(token: string): Promise<FileMetadata[]> {
       resolve(validFiles);
     };
     req.onerror = () => reject(req.error);
+  });
+}
+
+export async function clientGetAllLocalFilesForSync(): Promise<LocalFileRecord[]> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_FILES, "readonly");
+    const store = tx.objectStore(STORE_FILES);
+    const req = store.getAll();
+    req.onsuccess = () => {
+      const records: LocalFileRecord[] = req.result || [];
+      const now = new Date();
+      const validFiles = records.filter(
+        (record) => !record.inTrash && (!record.expiresAt || new Date(record.expiresAt) > now)
+      );
+      resolve(validFiles);
+    };
+    req.onerror = () => reject(req.error);
+  });
+}
+
+export async function clientDeleteFileDirect(fileId: string): Promise<void> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_FILES, "readwrite");
+    const store = tx.objectStore(STORE_FILES);
+    const delReq = store.delete(fileId);
+    delReq.onsuccess = () => resolve();
+    delReq.onerror = () => reject(delReq.error);
   });
 }
 
