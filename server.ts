@@ -389,6 +389,42 @@ app.delete("/api/admin/users/:id", authenticateToken, requireAdmin, async (req: 
   }
 });
 
+// 8. Reset user password / passcode (Admin only)
+app.post("/api/admin/users/:id/reset-password", authenticateToken, requireAdmin, async (req: any, res) => {
+  try {
+    const { id } = req.params;
+    const { newPassword } = req.body;
+
+    const users = await loadUsers();
+    const userIndex = users.findIndex(u => u.id === id);
+
+    if (userIndex === -1) {
+      return res.status(404).json({ error: "Utilisateur non trouvé." });
+    }
+
+    let passcode = newPassword ? newPassword.toString().trim() : "";
+    if (!passcode) {
+      passcode = Math.floor(100000 + Math.random() * 900000).toString();
+    }
+
+    if (!/^\d{6}$/.test(passcode)) {
+      return res.status(400).json({ error: "Le mot de passe doit être un code à 6 chiffres." });
+    }
+
+    users[userIndex].password = hashPassword(passcode);
+    await saveUsers(users);
+
+    res.json({
+      success: true,
+      message: "Mot de passe réinitialisé avec succès.",
+      newPassword: passcode,
+    });
+  } catch (error) {
+    console.error("Reset password error:", error);
+    res.status(500).json({ error: "Erreur lors de la réinitialisation du mot de passe." });
+  }
+});
+
 
 // --- Files Endpoints ---
 

@@ -270,6 +270,33 @@ export async function clientDeleteUser(token: string, targetUserId: string): Pro
   saveStoredSessions(sessions);
 }
 
+export async function clientResetUserPassword(token: string, targetUserId: string, customPassword?: string): Promise<{ newPassword: string }> {
+  const currentUser = await clientGetMe(token);
+  if (currentUser.role !== "admin") {
+    throw new Error("Accès non autorisé.");
+  }
+
+  const users = getStoredUsers();
+  const targetUser = users.find((u) => u.id === targetUserId);
+  if (!targetUser) {
+    throw new Error("Utilisateur introuvable.");
+  }
+
+  let passcode = customPassword ? customPassword.trim() : "";
+  if (!passcode) {
+    passcode = Math.floor(100000 + Math.random() * 900000).toString();
+  }
+
+  if (!/^\d{6}$/.test(passcode)) {
+    throw new Error("Le mot de passe doit être un code à 6 chiffres.");
+  }
+
+  targetUser.passwordHash = hashPasscode(passcode);
+  saveStoredUsers(users);
+
+  return { newPassword: passcode };
+}
+
 // --- FILE STORAGE OPERATIONS (IndexedDB) ---
 
 export async function clientUploadFile(

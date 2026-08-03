@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
-import { User, Shield, User as UserIcon, Trash2, Calendar, Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
+import { User, Shield, User as UserIcon, Trash2, Calendar, Loader2, AlertCircle, CheckCircle2, KeyRound, Copy, Check, RefreshCw, X } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { apiGetUsers, apiUpdateUserRole, apiDeleteUser } from "../lib/api";
+import { apiGetUsers, apiUpdateUserRole, apiDeleteUser, apiResetUserPassword } from "../lib/api";
 
 interface AdminUsersTabProps {
   currentUser: { id: string; username: string; role: 'admin' | 'user' } | null;
@@ -21,6 +21,13 @@ export default function AdminUsersTab({ currentUser }: AdminUsersTabProps) {
   const [success, setSuccess] = useState<string | null>(null);
   const [actionUserId, setActionUserId] = useState<string | null>(null);
 
+  // Reset password modal states
+  const [resetModalUser, setResetModalUser] = useState<{ id: string; username: string } | null>(null);
+  const [customPasscode, setCustomPasscode] = useState<string>("");
+  const [isResetting, setIsResetting] = useState(false);
+  const [resultPasscode, setResultPasscode] = useState<{ username: string; code: string } | null>(null);
+  const [copiedCode, setCopiedCode] = useState(false);
+
   const fetchUsers = async () => {
     setLoading(true);
     setError(null);
@@ -39,6 +46,58 @@ export default function AdminUsersTab({ currentUser }: AdminUsersTabProps) {
   useEffect(() => {
     fetchUsers();
   }, []);
+
+  const handleOpenResetModal = (u: UserData) => {
+    const randomCode = Math.floor(100000 + Math.random() * 900000).toString();
+    setCustomPasscode(randomCode);
+    setResetModalUser({ id: u.id, username: u.username });
+    setResultPasscode(null);
+    setCopiedCode(false);
+  };
+
+  const handleGenerateRandomCode = () => {
+    const randomCode = Math.floor(100000 + Math.random() * 900000).toString();
+    setCustomPasscode(randomCode);
+  };
+
+  const handleConfirmResetPassword = async () => {
+    if (!resetModalUser) return;
+    if (!/^\d{6}$/.test(customPasscode.trim())) {
+      setError("Le code doit contenir exactement 6 chiffres.");
+      return;
+    }
+
+    setIsResetting(true);
+    setError(null);
+
+    try {
+      const token = localStorage.getItem("qr_drive_token") || "";
+      const result = await apiResetUserPassword(token, resetModalUser.id, customPasscode.trim());
+
+      setResultPasscode({
+        username: resetModalUser.username,
+        code: result.newPassword,
+      });
+      setSuccess(`Le mot de passe de "${resetModalUser.username}" a été réinitialisé avec succès.`);
+      setTimeout(() => setSuccess(null), 4000);
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || "Erreur lors de la réinitialisation.");
+    } finally {
+      setIsResetting(false);
+    }
+  };
+
+  const handleCopyCode = async () => {
+    if (!resultPasscode) return;
+    try {
+      await navigator.clipboard.writeText(resultPasscode.code);
+      setCopiedCode(true);
+      setTimeout(() => setCopiedCode(false), 2000);
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   const handleToggleRole = async (userId: string, currentRole: 'admin' | 'user') => {
     if (userId === currentUser?.id) {
@@ -123,7 +182,7 @@ export default function AdminUsersTab({ currentUser }: AdminUsersTabProps) {
         <div>
           <h3 className="text-base font-bold text-slate-200">Gestion des Comptes</h3>
           <p className="text-xs text-slate-400 mt-1">
-            Administrez les rôles et supprimez les comptes utilisateurs. Les administrateurs peuvent voir et supprimer tous les fichiers partagés de la plateforme.
+            Administrez les rôles, régénérez les mots de passe et supprimez les comptes utilisateurs.
           </p>
         </div>
         <button
@@ -225,6 +284,16 @@ export default function AdminUsersTab({ currentUser }: AdminUsersTabProps) {
                     {/* Action buttons */}
                     <td className="py-4 px-5 text-right">
                       <div className="flex items-center justify-end space-x-2">
+                        {/* Reset Password / Passcode Button */}
+                        <button
+                          onClick={() => handleOpenResetModal(u)}
+                          disabled={isActing}
+                          className="p-2 bg-slate-950 hover:bg-emerald-950/30 text-slate-400 hover:text-emerald-400 border border-slate-800 hover:border-emerald-900/40 rounded-xl transition-all cursor-pointer min-h-[42px] min-w-[42px] flex items-center justify-center active:scale-95"
+                          title="Régénérer le mot de passe à 6 chiffres"
+                        >
+                          <KeyRound className="h-4 w-4" />
+                        </button>
+
                         {/* Toggle Role Button */}
                         <button
                           onClick={() => handleToggleRole(u.id, u.role)}
@@ -265,6 +334,134 @@ export default function AdminUsersTab({ currentUser }: AdminUsersTabProps) {
           </table>
         </div>
       </div>
+
+      {/* Reset Password Modal */}
+      <AnimatePresence>
+        {resetModalUser && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="relative bg-slate-900 border border-slate-800/90 rounded-3xl w-full max-w-md overflow-hidden shadow-2xl p-6"
+            >
+              <div className="flex items-center justify-between pb-4 border-b border-slate-800">
+                <div className="flex items-center space-x-2 text-emerald-400">
+                  <KeyRound className="h-5 w-5" />
+                  <h3 className="font-bold text-slate-200">Réinitialiser le mot de passe</h3>
+                </div>
+                <button
+                  onClick={() => setResetModalUser(null)}
+                  className="text-slate-400 hover:text-slate-200 hover:bg-slate-800 p-2 rounded-xl transition-colors cursor-pointer"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              {!resultPasscode ? (
+                <div className="mt-5 space-y-4">
+                  <p className="text-xs text-slate-300">
+                    Définissez ou régénérez un nouveau code à 6 chiffres pour l'utilisateur{" "}
+                    <strong className="text-emerald-400">{resetModalUser.username}</strong> :
+                  </p>
+
+                  <div className="space-y-2">
+                    <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                      Nouveau code (6 chiffres)
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        maxLength={6}
+                        value={customPasscode}
+                        onChange={(e) => setCustomPasscode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                        placeholder="111111"
+                        className="bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-2xl px-4 py-3 text-center text-xl font-mono tracking-widest text-emerald-400 font-bold focus:outline-none w-full"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleGenerateRandomCode}
+                        className="p-3 bg-slate-800 hover:bg-slate-750 text-slate-300 rounded-2xl border border-slate-700 hover:border-slate-600 cursor-pointer transition-colors shrink-0"
+                        title="Générer un code aléatoire"
+                      >
+                        <RefreshCw className="h-5 w-5" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="pt-3 flex items-center justify-end space-x-3 border-t border-slate-800">
+                    <button
+                      type="button"
+                      onClick={() => setResetModalUser(null)}
+                      className="px-4 py-2.5 rounded-xl text-xs font-bold bg-slate-950 text-slate-400 hover:text-slate-200 border border-slate-800 cursor-pointer transition-colors"
+                    >
+                      Annuler
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleConfirmResetPassword}
+                      disabled={isResetting || customPasscode.length !== 6}
+                      className="px-5 py-2.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-950/20 cursor-pointer transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+                    >
+                      {isResetting ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          <span>Mise à jour...</span>
+                        </>
+                      ) : (
+                        <span>Enregistrer le code</span>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-5 text-center space-y-4">
+                  <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl text-emerald-400 inline-block mx-auto">
+                    <CheckCircle2 className="h-8 w-8" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-slate-200">Mot de passe mis à jour !</h4>
+                    <p className="text-xs text-slate-400 mt-1">
+                      Le code d'accès pour <strong className="text-slate-200">{resultPasscode.username}</strong> est maintenant :
+                    </p>
+                  </div>
+
+                  <div className="bg-slate-950 border border-emerald-500/30 rounded-2xl p-4 flex items-center justify-between">
+                    <span className="text-2xl font-mono font-bold tracking-widest text-emerald-400">
+                      {resultPasscode.code}
+                    </span>
+                    <button
+                      onClick={handleCopyCode}
+                      className="flex items-center space-x-1.5 px-3 py-2 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-xl text-xs font-bold transition-all cursor-pointer hover:bg-emerald-500/30 active:scale-95"
+                    >
+                      {copiedCode ? (
+                        <>
+                          <Check className="h-4 w-4" />
+                          <span>Copié !</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="h-4 w-4" />
+                          <span>Copier</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+
+                  <div className="pt-2">
+                    <button
+                      onClick={() => setResetModalUser(null)}
+                      className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-2xl text-xs font-bold transition-colors cursor-pointer"
+                    >
+                      Fermer
+                    </button>
+                  </div>
+                </div>
+              )}
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

@@ -7,6 +7,7 @@ import {
   clientGetUsers,
   clientUpdateUserRole,
   clientDeleteUser,
+  clientResetUserPassword,
   clientUploadFile,
   clientGetFiles,
   clientGetFileMetadata,
@@ -321,5 +322,32 @@ export async function apiDeleteUser(token: string, userId: string): Promise<void
     throw new Error(data.error || "Erreur lors de la suppression");
   } catch (err) {
     return await clientDeleteUser(token, userId);
+  }
+}
+
+export async function apiResetUserPassword(token: string, userId: string, newPassword?: string): Promise<{ newPassword: string }> {
+  try {
+    const res = await fetch(getApiUrl(`/api/admin/users/${userId}/reset-password`), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ newPassword }),
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      return { newPassword: data.newPassword };
+    }
+
+    if (res.status === 404) {
+      return await clientResetUserPassword(token, userId, newPassword);
+    }
+
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || "Erreur lors de la réinitialisation");
+  } catch (err) {
+    return await clientResetUserPassword(token, userId, newPassword);
   }
 }
