@@ -29,7 +29,37 @@ function generateShortId(): string {
 }
 
 const USERS_FILE = path.join(UPLOADS_DIR, "users.json");
+const HISTORY_FILE = path.join(UPLOADS_DIR, "history.json");
 const PASSWORD_SALT = "qrdrive-secret-salt-2026";
+
+async function logActivity(entry: {
+  action: 'upload' | 'download' | 'trash' | 'restore' | 'delete' | 'user_update';
+  userId: string;
+  username: string;
+  details: string;
+  fileName?: string;
+  fileId?: string;
+}) {
+  try {
+    let logs: any[] = [];
+    if (fs.existsSync(HISTORY_FILE)) {
+      const data = await fs.promises.readFile(HISTORY_FILE, "utf-8");
+      logs = JSON.parse(data);
+    }
+    const newLog = {
+      id: generateShortId(),
+      timestamp: new Date().toISOString(),
+      ...entry,
+    };
+    logs.unshift(newLog);
+    if (logs.length > 500) {
+      logs = logs.slice(0, 500);
+    }
+    await fs.promises.writeFile(HISTORY_FILE, JSON.stringify(logs, null, 2));
+  } catch (err) {
+    console.error("Error logging activity:", err);
+  }
+}
 
 // Session storage in memory (token -> user info)
 const SESSIONS = new Map<string, { id: string; username: string; role: 'admin' | 'user' }>();
@@ -540,6 +570,15 @@ app.post("/api/upload", authenticateToken, async (req: any, res) => {
     await fs.promises.writeFile(binPath, buffer);
     await fs.promises.writeFile(metaPath, JSON.stringify(metadata, null, 2));
 
+    await logActivity({
+      action: "upload",
+      userId: req.user.id,
+      username: req.user.username || "utilisateur",
+      details: `Fichier "${name}" téléversé (${(metadata.size / 1024).toFixed(1)} Ko)`,
+      fileName: name,
+      fileId: id,
+    });
+
     res.status(201).json(metadata);
   } catch (error: any) {
     console.error("Upload error:", error);
@@ -547,12 +586,12 @@ app.post("/api/upload", authenticateToken, async (req: any, res) => {
   }
 });
 
-// 2. Get list of all files (metadata only) - Authenticated
-// Administrators see all files, standard users see only theirs
+// 2. Get list of active files (metadata only) - Authenticated
+// Administrators see all active files, standard users see only theirs
 app.get("/api/files", authenticateToken, async (req: any, res) => {
   try {
     const files = await fs.promises.readdir(UPLOADS_DIR);
-    const metaFiles = files.filter((f) => f.endsWith(".meta.json") && f !== "users.json");
+    const metaFiles = files.filter((f) => f.endsWith(".meta.json") && f !== "users.json" && f !== "history.json");
 
     const list = [];
     for (const metaFile of metaFiles) {
@@ -561,8 +600,16 @@ app.get("/api/files", authenticateToken, async (req: any, res) => {
         const content = await fs.promises.readFile(filePath, "utf-8");
         const meta = JSON.parse(content);
         
+        // Exclude files in trash
+        if (meta.inTrash) continue;
+
         // Filter: Admin sees everything, standard user sees only their files
-        if (req.user.role === "admin" || meta.ownerId === req.user.id) {
+        const isOwner =
+          (meta.ownerId && meta.ownerId === req.user.id) ||
+          (meta.ownerUsername && meta.ownerUsername.toLowerCase() === req.user.username.toLowerCase()) ||
+          (!meta.ownerId && !meta.ownerUsername);
+
+        if (req.user.role === "admin" || isOwner) {
           list.push(meta);
         }
       } catch (err) {
@@ -580,6 +627,156 @@ app.get("/api/files", authenticateToken, async (req: any, res) => {
   }
 });
 
+// 2b. Get list of files in TRASH - Authenticated
+app.get("/api/files-trash", authenticateToken, async (req: any, res) => {
+  try {
+    const files = await fs.promises.readdir(UPLOADS_DIR);
+    const metaFiles = files.filter((f) => f.endsWith(".meta.json") && f !== "users.json" && f !== "history.json");
+
+    const list = [];
+    for (const metaFile of metaFiles) {
+      const filePath = path.join(UPLOADS_DIR, metaFile);
+      try {
+        const content = await fs.promises.readFile(filePath, "utf-8");
+        const meta = JSON.parse(content);
+        
+        // Include ONLY files in trash
+        if (!meta.inTrash) continue;
+
+        const isOwner =
+          (meta.ownerId && meta.ownerId === req.user.id) ||
+          (meta.ownerUsername && meta.ownerUsername.toLowerCase() === req.user.username.toLowerCase()) ||
+          (!meta.ownerId && !meta.ownerUsername);
+
+        if (req.user.role === "admin" || isOwner) {
+          list.push(meta);
+        }
+      } catch (err) {
+        console.error(`Error reading trash metadata file ${metaFile}:`, err);
+      }
+    }
+
+    // Sort by deletedAt descending
+    list.sort((a, b) => new Date(b.deletedAt || b.uploadedAt).getTime() - new Date(a.deletedAt || a.uploadedAt).getTime());
+
+    res.json(list);
+  } catch (error) {
+    console.error("List trash files error:", error);
+    res.status(500).json({ error: "Erreur lors de la récupération de la corbeille." });
+  }
+});
+
+// 2c. Restore a file from TRASH - Authenticated
+app.post("/api/files/:id/restore", authenticateToken, async (req: any, res) => {
+  const { id } = req.params;
+  const metaPath = path.join(UPLOADS_DIR, `${id}.meta.json`);
+
+  if (!fs.existsSync(metaPath)) {
+    return res.status(404).json({ error: "Fichier non trouvé." });
+  }
+
+  try {
+    const metaContent = await fs.promises.readFile(metaPath, "utf-8");
+    const metadata = JSON.parse(metaContent);
+
+    const isOwner =
+      (metadata.ownerId && metadata.ownerId === req.user.id) ||
+      (metadata.ownerUsername && metadata.ownerUsername.toLowerCase() === req.user.username.toLowerCase()) ||
+      (!metadata.ownerId && !metadata.ownerUsername);
+
+    if (req.user.role !== "admin" && !isOwner) {
+      return res.status(403).json({ error: "Vous n'êtes pas autorisé à restaurer ce fichier." });
+    }
+
+    metadata.inTrash = false;
+    metadata.deletedAt = null;
+
+    await fs.promises.writeFile(metaPath, JSON.stringify(metadata, null, 2));
+
+    await logActivity({
+      action: "restore",
+      userId: req.user.id,
+      username: req.user.username || "utilisateur",
+      details: `Fichier "${metadata.name}" restauré de la corbeille`,
+      fileName: metadata.name,
+      fileId: id,
+    });
+
+    res.json({ success: true, metadata, message: "Fichier restauré avec succès." });
+  } catch (error) {
+    console.error("Restore file error:", error);
+    res.status(500).json({ error: "Erreur lors de la restauration du fichier." });
+  }
+});
+
+// 2d. Empty Trash - Authenticated
+app.delete("/api/files-trash/empty", authenticateToken, async (req: any, res) => {
+  try {
+    const files = await fs.promises.readdir(UPLOADS_DIR);
+    const metaFiles = files.filter((f) => f.endsWith(".meta.json") && f !== "users.json" && f !== "history.json");
+
+    let count = 0;
+    for (const metaFile of metaFiles) {
+      const filePath = path.join(UPLOADS_DIR, metaFile);
+      try {
+        const content = await fs.promises.readFile(filePath, "utf-8");
+        const meta = JSON.parse(content);
+        
+        if (!meta.inTrash) continue;
+
+        const isOwner =
+          (meta.ownerId && meta.ownerId === req.user.id) ||
+          (meta.ownerUsername && meta.ownerUsername.toLowerCase() === req.user.username.toLowerCase()) ||
+          (!meta.ownerId && !meta.ownerUsername);
+
+        if (req.user.role === "admin" || isOwner) {
+          const binPath = path.join(UPLOADS_DIR, `${meta.id}.bin`);
+          if (fs.existsSync(binPath)) {
+            await fs.promises.unlink(binPath);
+          }
+          await fs.promises.unlink(filePath);
+          count++;
+        }
+      } catch (err) {
+        console.error(`Error emptying file ${metaFile}:`, err);
+      }
+    }
+
+    await logActivity({
+      action: "delete",
+      userId: req.user.id,
+      username: req.user.username || "utilisateur",
+      details: `Corbeille vidée (${count} fichier(s) supprimé(s) définitivement)`,
+    });
+
+    res.json({ success: true, count, message: `Corbeille vidée avec succès (${count} fichier(s)).` });
+  } catch (error) {
+    console.error("Empty trash error:", error);
+    res.status(500).json({ error: "Erreur lors du vidage de la corbeille." });
+  }
+});
+
+// 2e. Get Activity History Logs - Authenticated
+app.get("/api/history", authenticateToken, async (req: any, res) => {
+  try {
+    if (!fs.existsSync(HISTORY_FILE)) {
+      return res.json([]);
+    }
+    const data = await fs.promises.readFile(HISTORY_FILE, "utf-8");
+    const logs = JSON.parse(data);
+
+    // Admin sees all logs, regular user sees logs where userId matches
+    const filtered = req.user.role === "admin"
+      ? logs
+      : logs.filter((log: any) => log.userId === req.user.id || (log.username && log.username.toLowerCase() === req.user.username.toLowerCase()));
+
+    res.json(filtered);
+  } catch (error) {
+    console.error("Get history error:", error);
+    res.status(500).json({ error: "Erreur lors de la récupération de l'historique." });
+  }
+});
+
 // 3. Get metadata for a specific file (PUBLIC ACCESS)
 app.get("/api/files/:id", async (req, res) => {
   const { id } = req.params;
@@ -592,6 +789,10 @@ app.get("/api/files/:id", async (req, res) => {
   try {
     const content = await fs.promises.readFile(metaPath, "utf-8");
     const metadata = JSON.parse(content);
+
+    if (metadata.inTrash) {
+      return res.status(404).json({ error: "Ce fichier est actuellement dans la corbeille." });
+    }
 
     // Enforce expiration check
     if (metadata.expiresAt && new Date() > new Date(metadata.expiresAt)) {
@@ -627,6 +828,10 @@ app.get("/api/download/:id", async (req, res) => {
     const metaContent = await fs.promises.readFile(metaPath, "utf-8");
     const metadata = JSON.parse(metaContent);
 
+    if (metadata.inTrash) {
+      return res.status(404).send("Ce fichier est dans la corbeille.");
+    }
+
     // Enforce expiration check
     if (metadata.expiresAt && new Date() > new Date(metadata.expiresAt)) {
       return res.status(410).send("Ce fichier a expiré et n'est plus accessible.");
@@ -634,6 +839,15 @@ app.get("/api/download/:id", async (req, res) => {
 
     metadata.downloads += 1;
     await fs.promises.writeFile(metaPath, JSON.stringify(metadata, null, 2));
+
+    await logActivity({
+      action: "download",
+      userId: metadata.ownerId || "public",
+      username: metadata.ownerUsername || "visiteur",
+      details: `Fichier "${metadata.name}" téléchargé (${metadata.downloads} fois au total)`,
+      fileName: metadata.name,
+      fileId: id,
+    });
 
     // Serve binary file
     const fileBuffer = await fs.promises.readFile(binPath);
@@ -652,10 +866,10 @@ app.get("/api/download/:id", async (req, res) => {
   }
 });
 
-// 5. Delete a file (Authenticated)
-// Administrators can delete any file, standard users can only delete their own
+// 5. Delete a file (Authenticated) - Soft delete by default, or permanent delete if permanent=true
 app.delete("/api/files/:id", authenticateToken, async (req: any, res) => {
   const { id } = req.params;
+  const isPermanent = req.query.permanent === "true";
   const metaPath = path.join(UPLOADS_DIR, `${id}.meta.json`);
   const binPath = path.join(UPLOADS_DIR, `${id}.bin`);
 
@@ -667,7 +881,7 @@ app.delete("/api/files/:id", authenticateToken, async (req: any, res) => {
     const metaContent = await fs.promises.readFile(metaPath, "utf-8");
     const metadata = JSON.parse(metaContent);
 
-    // Authorization check: Admin can delete anything. Standard user can delete if they own it (by id or username) or if owner is unassigned.
+    // Authorization check
     const isOwner =
       (metadata.ownerId && metadata.ownerId === req.user.id) ||
       (metadata.ownerUsername && metadata.ownerUsername.toLowerCase() === req.user.username.toLowerCase()) ||
@@ -677,11 +891,40 @@ app.delete("/api/files/:id", authenticateToken, async (req: any, res) => {
       return res.status(403).json({ error: "Vous n'êtes pas autorisé à supprimer ce fichier." });
     }
 
-    if (fs.existsSync(binPath)) {
-      await fs.promises.unlink(binPath);
+    if (isPermanent) {
+      if (fs.existsSync(binPath)) {
+        await fs.promises.unlink(binPath);
+      }
+      await fs.promises.unlink(metaPath);
+
+      await logActivity({
+        action: "delete",
+        userId: req.user.id,
+        username: req.user.username || "utilisateur",
+        details: `Fichier "${metadata.name}" supprimé définitivement`,
+        fileName: metadata.name,
+        fileId: id,
+      });
+
+      return res.json({ success: true, message: "Fichier supprimé définitivement." });
+    } else {
+      // Soft-delete: Move to trash
+      metadata.inTrash = true;
+      metadata.deletedAt = new Date().toISOString();
+
+      await fs.promises.writeFile(metaPath, JSON.stringify(metadata, null, 2));
+
+      await logActivity({
+        action: "trash",
+        userId: req.user.id,
+        username: req.user.username || "utilisateur",
+        details: `Fichier "${metadata.name}" déplacé dans la corbeille`,
+        fileName: metadata.name,
+        fileId: id,
+      });
+
+      return res.json({ success: true, message: "Fichier déplacé dans la corbeille." });
     }
-    await fs.promises.unlink(metaPath);
-    res.json({ success: true, message: "Fichier supprimé avec succès." });
   } catch (error) {
     console.error("Delete file error:", error);
     res.status(500).json({ error: "Erreur lors de la suppression du fichier." });

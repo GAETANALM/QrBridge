@@ -1,4 +1,4 @@
-import { FileMetadata, User } from "../types";
+import { FileMetadata, User, ActivityLog } from "../types";
 import {
   clientLogin,
   clientRegister,
@@ -14,6 +14,10 @@ import {
   clientGetFileMetadata,
   clientGetFileContent,
   clientDeleteFile,
+  clientGetTrashedFiles,
+  clientRestoreFile,
+  clientEmptyTrash,
+  clientGetHistoryLogs,
 } from "./clientStorage";
 
 export function getApiUrl(path: string): string {
@@ -169,9 +173,10 @@ export async function apiUploadFile(
   }
 }
 
-export async function apiDeleteFile(token: string, fileId: string): Promise<void> {
+export async function apiDeleteFile(token: string, fileId: string, permanent: boolean = false): Promise<void> {
   try {
-    const res = await fetch(getApiUrl(`/api/files/${fileId}`), {
+    const url = getApiUrl(`/api/files/${fileId}${permanent ? '?permanent=true' : ''}`);
+    const res = await fetch(url, {
       method: "DELETE",
       headers: { Authorization: `Bearer ${token}` },
     });
@@ -179,7 +184,7 @@ export async function apiDeleteFile(token: string, fileId: string): Promise<void
     if (res.ok) return;
 
     if (res.status === 404) {
-      return await clientDeleteFile(token, fileId);
+      return await clientDeleteFile(token, fileId, permanent);
     }
 
     const data = await res.json().catch(() => ({}));
@@ -188,7 +193,100 @@ export async function apiDeleteFile(token: string, fileId: string): Promise<void
     if (err instanceof Error && err.message && !err.message.includes("Failed to fetch") && !err.message.includes("NetworkError")) {
       throw err;
     }
-    return await clientDeleteFile(token, fileId);
+    return await clientDeleteFile(token, fileId, permanent);
+  }
+}
+
+export async function apiGetTrashedFiles(token: string): Promise<FileMetadata[]> {
+  try {
+    const res = await fetch(getApiUrl("/api/files-trash"), {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    if (res.ok) {
+      return await res.json();
+    }
+
+    if (res.status === 404) {
+      return await clientGetTrashedFiles(token);
+    }
+
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || "Impossible de charger la corbeille.");
+  } catch (err: any) {
+    if (err.message && err.message.includes("Impossible")) throw err;
+    return await clientGetTrashedFiles(token);
+  }
+}
+
+export async function apiRestoreFile(token: string, fileId: string): Promise<void> {
+  try {
+    const res = await fetch(getApiUrl(`/api/files/${fileId}/restore`), {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    if (res.ok) return;
+
+    if (res.status === 404) {
+      return await clientRestoreFile(token, fileId);
+    }
+
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || "Impossible de restaurer le fichier.");
+  } catch (err: any) {
+    if (err instanceof Error && err.message && !err.message.includes("Failed to fetch") && !err.message.includes("NetworkError")) {
+      throw err;
+    }
+    return await clientRestoreFile(token, fileId);
+  }
+}
+
+export async function apiEmptyTrash(token: string): Promise<number> {
+  try {
+    const res = await fetch(getApiUrl("/api/files-trash/empty"), {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      return data.count || 0;
+    }
+
+    if (res.status === 404) {
+      return await clientEmptyTrash(token);
+    }
+
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || "Impossible de vider la corbeille.");
+  } catch (err: any) {
+    if (err instanceof Error && err.message && !err.message.includes("Failed to fetch") && !err.message.includes("NetworkError")) {
+      throw err;
+    }
+    return await clientEmptyTrash(token);
+  }
+}
+
+export async function apiGetHistory(token: string): Promise<ActivityLog[]> {
+  try {
+    const res = await fetch(getApiUrl("/api/history"), {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    if (res.ok) {
+      return await res.json();
+    }
+
+    if (res.status === 404) {
+      return await clientGetHistoryLogs(token);
+    }
+
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || "Impossible de charger l'historique.");
+  } catch (err: any) {
+    if (err.message && err.message.includes("Impossible")) throw err;
+    return await clientGetHistoryLogs(token);
   }
 }
 

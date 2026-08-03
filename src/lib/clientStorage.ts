@@ -472,7 +472,7 @@ export async function clientGetFileContent(fileId: string): Promise<{ record?: L
   });
 }
 
-export async function clientDeleteFile(token: string, fileId: string): Promise<void> {
+export async function clientDeleteFile(token: string, fileId: string, permanent: boolean = false): Promise<void> {
   const currentUser = await clientGetMe(token);
   const db = await openDB();
 
@@ -498,10 +498,141 @@ export async function clientDeleteFile(token: string, fileId: string): Promise<v
         return;
       }
 
-      const delReq = store.delete(fileId);
-      delReq.onsuccess = () => resolve();
-      delReq.onerror = () => reject(delReq.error);
+      if (permanent) {
+        const delReq = store.delete(fileId);
+        delReq.onsuccess = () => resolve();
+        delReq.onerror = () => reject(delReq.error);
+      } else {
+        record.inTrash = true;
+        record.deletedAt = new Date().toISOString();
+        const putReq = store.put(record);
+        putReq.onsuccess = () => resolve();
+        putReq.onerror = () => reject(putReq.error);
+      }
     };
     getReq.onerror = () => reject(getReq.error);
   });
+}
+
+export async function clientGetTrashedFiles(token: string): Promise<FileMetadata[]> {
+  const currentUser = await clientGetMe(token);
+  const db = await openDB();
+
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_FILES, "readonly");
+    const store = tx.objectStore(STORE_FILES);
+    const req = store.getAll();
+
+    req.onsuccess = () => {
+      const records: LocalFileRecord[] = req.result || [];
+      const trashed = records.filter((r) => r.inTrash);
+
+      let userFiles = trashed;
+      if (currentUser.role !== "admin") {
+        userFiles = trashed.filter((r) =>
+          (r.ownerId && r.ownerId === currentUser.id) ||
+          (r.ownerUsername && r.ownerUsername.toLowerCase() === currentUser.username.toLowerCase())
+        );
+      }
+
+      const list: FileMetadata[] = userFiles.map((r) => ({
+        id: r.id,
+        name: r.name,
+        type: r.type,
+        size: r.size,
+        uploadedAt: r.uploadedAt,
+        downloads: r.downloads,
+        expiresAt: r.expiresAt,
+        ownerId: r.ownerId,
+        ownerUsername: r.ownerUsername,
+        inTrash: r.inTrash,
+        deletedAt: r.deletedAt,
+      }));
+
+      list.sort((a, b) => new Date(b.deletedAt || b.uploadedAt).getTime() - new Date(a.deletedAt || a.uploadedAt).getTime());
+      resolve(list);
+    };
+    req.onerror = () => reject(req.error);
+  });
+}
+
+export async function clientRestoreFile(token: string, fileId: string): Promise<void> {
+  const currentUser = await clientGetMe(token);
+  const db = await openDB();
+
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_FILES, "readwrite");
+    const store = tx.objectStore(STORE_FILES);
+    const getReq = store.get(fileId);
+
+    getReq.onsuccess = () => {
+      const record: LocalFileRecord = getReq.result;
+      if (!record) {
+        reject(new Error("Fichier introuvable."));
+        return;
+      }
+
+      const isOwner =
+        (record.ownerId && record.ownerId === currentUser.id) ||
+        (record.ownerUsername && record.ownerUsername.toLowerCase() === currentUser.username.toLowerCase()) ||
+        (!record.ownerId && !record.ownerUsername);
+
+      if (currentUser.role !== "admin" && !isOwner) {
+        reject(new Error("Vous n'avez pas la permission de restaurer ce fichier."));
+        return;
+      }
+
+      record.inTrash = false;
+      record.deletedAt = null;
+
+      const putReq = store.put(record);
+      putReq.onsuccess = () => resolve();
+      putReq.onerror = () => reject(putReq.error);
+    };
+    getReq.onerror = () => reject(getReq.error);
+  });
+}
+
+export async function clientEmptyTrash(token: string): Promise<number> {
+  const currentUser = await clientGetMe(token);
+  const db = await openDB();
+
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_FILES, "readwrite");
+    const store = tx.objectStore(STORE_FILES);
+    const req = store.getAll();
+
+    req.onsuccess = () => {
+      const records: LocalFileRecord[] = req.result || [];
+      const trashed = records.filter((r) => r.inTrash);
+
+      let count = 0;
+      for (const r of trashed) {
+        const isOwner =
+          (r.ownerId && r.ownerId === currentUser.id) ||
+          (r.ownerUsername && r.ownerUsername.toLowerCase() === currentUser.username.toLowerCase()) ||
+          (!r.ownerId && !r.ownerUsername);
+
+        if (currentUser.role === "admin" || isOwner) {
+          store.delete(r.id);
+          count++;
+        }
+      }
+      resolve(count);
+    };
+    req.onerror = () => reject(req.error);
+  });
+}
+
+export async function clientGetHistoryLogs(token: string): Promise<any[]> {
+  const raw = localStorage.getItem("qr_drive_client_history");
+  if (!raw) return [];
+  try {
+    const logs = JSON.parse(raw);
+    const currentUser = await clientGetMe(token);
+    if (currentUser.role === "admin") return logs;
+    return logs.filter((l: any) => l.userId === currentUser.id || l.username?.toLowerCase() === currentUser.username.toLowerCase());
+  } catch {
+    return [];
+  }
 }

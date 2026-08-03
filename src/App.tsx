@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { HardDrive, Search, Loader2, AlertCircle, RefreshCw, QrCode, Sparkles, LogOut, Users, FileUp, Shield } from "lucide-react";
+import { HardDrive, Search, Loader2, AlertCircle, RefreshCw, QrCode, Sparkles, LogOut, Users, FileUp, Shield, Trash2, History, ArrowUpDown, X, Filter } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import FileUploader from "./components/FileUploader";
 import FileListItem from "./components/FileListItem";
@@ -7,7 +7,9 @@ import QRCodeDialog from "./components/QRCodeDialog";
 import SharePage from "./components/SharePage";
 import AuthPage from "./components/AuthPage";
 import AdminUsersTab from "./components/AdminUsersTab";
-import { FileMetadata, AppRoute, User } from "./types";
+import TrashBinTab from "./components/TrashBinTab";
+import HistoryTab from "./components/HistoryTab";
+import { FileMetadata, AppRoute, User, SortField, SortOrder } from "./types";
 import { apiGetMe, apiLogout, apiGetFiles, apiDeleteFile } from "./lib/api";
 
 export default function App() {
@@ -18,11 +20,15 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedFile, setSelectedFile] = useState<FileMetadata | null>(null);
 
+  // Sorting state
+  const [sortField, setSortField] = useState<SortField>("date");
+  const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
+
   // Authentication states
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isAuthChecking, setIsAuthChecking] = useState(true);
-  const [activeTab, setActiveTab] = useState<'files' | 'users'>('files');
+  const [activeTab, setActiveTab] = useState<'files' | 'trash' | 'history' | 'users'>('files');
 
   // Load and verify auth state on mount
   useEffect(() => {
@@ -133,14 +139,14 @@ export default function App() {
   };
 
   const handleDeleteFile = async (id: string) => {
-    if (window.confirm("Êtes-vous sûr de vouloir supprimer définitivement ce fichier ?")) {
+    if (window.confirm("Voulez-vous placer ce fichier dans la corbeille ?")) {
       try {
         const activeToken = token || localStorage.getItem("qr_drive_token") || "";
         if (!activeToken) {
           alert("Vous devez être connecté pour supprimer un fichier.");
           return;
         }
-        await apiDeleteFile(activeToken, id);
+        await apiDeleteFile(activeToken, id, false);
         if (selectedFile?.id === id) {
           setSelectedFile(null);
         }
@@ -153,10 +159,30 @@ export default function App() {
     }
   };
 
-  // Filter files based on search
-  const filteredFiles = files.filter((file) =>
-    file.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // Keyword search & Sorting logic
+  const processedFiles = [...files]
+    .filter((file) => {
+      if (!searchQuery.trim()) return true;
+      const query = searchQuery.toLowerCase().trim();
+      return (
+        file.name.toLowerCase().includes(query) ||
+        (file.type && file.type.toLowerCase().includes(query)) ||
+        (file.ownerUsername && file.ownerUsername.toLowerCase().includes(query))
+      );
+    })
+    .sort((a, b) => {
+      if (sortField === "name") {
+        const comp = a.name.localeCompare(b.name, "fr", { sensitivity: "base" });
+        return sortOrder === "asc" ? comp : -comp;
+      }
+      if (sortField === "size") {
+        return sortOrder === "asc" ? a.size - b.size : b.size - a.size;
+      }
+      // Default sortField === "date"
+      const timeA = new Date(a.uploadedAt).getTime();
+      const timeB = new Date(b.uploadedAt).getTime();
+      return sortOrder === "asc" ? timeA - timeB : timeB - timeA;
+    });
 
   // If we are on the public file view/receipt page (NO AUTH NEEDED)
   if (route.type === "share") {
@@ -193,7 +219,7 @@ export default function App() {
       <div className="max-w-4xl w-full mx-auto px-3.5 sm:px-4 py-4 sm:py-8 flex-grow">
         
         {/* Navigation / Hero section */}
-        <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 sm:mb-10 border-b border-slate-900 pb-5">
+        <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 sm:mb-8 border-b border-slate-900 pb-5">
           <div className="flex items-center space-x-3">
             <div className="p-2.5 bg-emerald-500 text-slate-950 rounded-2xl shadow-lg shadow-emerald-500/20 ring-4 ring-emerald-500/10 shrink-0">
               <HardDrive className="h-6 w-6" id="logo-icon" />
@@ -238,33 +264,58 @@ export default function App() {
           </div>
         </header>
 
-        {/* Admin Tab Switching */}
-        {user.role === "admin" && (
-          <div className="flex bg-slate-900/40 border border-slate-850 p-1.5 rounded-2xl mb-6 sm:mb-8 max-w-sm w-full">
-            <button
-              onClick={() => setActiveTab('files')}
-              className={`flex-1 flex items-center justify-center space-x-2 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer min-h-[44px] active:scale-95 ${
-                activeTab === 'files'
-                  ? "bg-slate-850 text-emerald-400 shadow-sm border border-slate-800"
-                  : "text-slate-400 hover:text-slate-300"
-              }`}
-            >
-              <FileUp className="h-4 w-4" />
-              <span>Mes Fichiers</span>
-            </button>
+        {/* Global Navigation Bar */}
+        <div className="flex flex-wrap bg-slate-900/60 border border-slate-850 p-1.5 rounded-2xl mb-6 sm:mb-8 w-full gap-1">
+          <button
+            onClick={() => setActiveTab('files')}
+            className={`flex-1 flex items-center justify-center space-x-2 py-2.5 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer min-h-[42px] active:scale-95 ${
+              activeTab === 'files'
+                ? "bg-slate-800 text-emerald-400 shadow-sm border border-slate-750"
+                : "text-slate-400 hover:text-slate-200"
+            }`}
+          >
+            <FileUp className="h-4 w-4" />
+            <span>Fichiers</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('trash')}
+            className={`flex-1 flex items-center justify-center space-x-2 py-2.5 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer min-h-[42px] active:scale-95 ${
+              activeTab === 'trash'
+                ? "bg-slate-800 text-amber-400 shadow-sm border border-slate-750"
+                : "text-slate-400 hover:text-slate-200"
+            }`}
+          >
+            <Trash2 className="h-4 w-4" />
+            <span>Corbeille</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('history')}
+            className={`flex-1 flex items-center justify-center space-x-2 py-2.5 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer min-h-[42px] active:scale-95 ${
+              activeTab === 'history'
+                ? "bg-slate-800 text-indigo-400 shadow-sm border border-slate-750"
+                : "text-slate-400 hover:text-slate-200"
+            }`}
+          >
+            <History className="h-4 w-4" />
+            <span>Historique</span>
+          </button>
+
+          {user.role === "admin" && (
             <button
               onClick={() => setActiveTab('users')}
-              className={`flex-1 flex items-center justify-center space-x-2 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer min-h-[44px] active:scale-95 ${
+              className={`flex-1 flex items-center justify-center space-x-2 py-2.5 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer min-h-[42px] active:scale-95 ${
                 activeTab === 'users'
-                  ? "bg-slate-850 text-emerald-400 shadow-sm border border-slate-800"
-                  : "text-slate-400 hover:text-slate-300"
+                  ? "bg-slate-800 text-purple-400 shadow-sm border border-slate-750"
+                  : "text-slate-400 hover:text-slate-200"
               }`}
             >
               <Users className="h-4 w-4" />
-              <span>Administration</span>
+              <span>Admin</span>
             </button>
-          </div>
-        )}
+          )}
+        </div>
 
         <AnimatePresence mode="wait">
           {activeTab === 'files' ? (
@@ -276,46 +327,75 @@ export default function App() {
               transition={{ duration: 0.15 }}
             >
               {/* Upload Container */}
-              <section className="mb-10" id="upload-section">
+              <section className="mb-8" id="upload-section">
                 <FileUploader onUploadSuccess={handleUploadSuccess} />
               </section>
 
               {/* Shared Files List Explorer */}
-              <section className="space-y-6" id="files-explorer-section">
+              <section className="space-y-5" id="files-explorer-section">
                 
-                {/* Header & Search */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-900 pb-4">
-                  <h2 className="text-base font-bold text-slate-300 flex items-center gap-2">
+                {/* Header, Search & Sort controls */}
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-900 pb-4">
+                  <h2 className="text-base font-bold text-slate-300 flex items-center gap-2 shrink-0">
                     <span>
                       {user.role === "admin" ? "Tous les Fichiers Plateforme" : "Mes Fichiers Partagés"}
                     </span>
                     {files.length > 0 && (
                       <span className="text-xs bg-slate-900 border border-slate-800 text-slate-400 px-2.5 py-0.5 rounded-full font-semibold">
-                        {files.length}
+                        {searchQuery ? `${processedFiles.length} / ${files.length}` : files.length}
                       </span>
                     )}
                   </h2>
 
-                  <div className="flex items-center gap-3">
-                    {/* Search Input */}
-                    {files.length > 0 && (
-                      <div className="relative max-w-xs w-full">
-                        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
-                        <input
-                          id="search-input"
-                          type="text"
-                          placeholder="Rechercher..."
-                          value={searchQuery}
-                          onChange={(e) => setSearchQuery(e.target.value)}
-                          className="w-full bg-slate-900/60 border border-slate-800 focus:border-slate-700 hover:border-slate-850 rounded-xl pl-10 pr-4 py-2 text-xs text-slate-200 placeholder:text-slate-500 focus:outline-none transition-all"
-                        />
-                      </div>
-                    )}
+                  <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
+                    {/* Keyword Search Input */}
+                    <div className="relative flex-1 min-w-[200px] sm:max-w-xs">
+                      <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-500" />
+                      <input
+                        id="search-input"
+                        type="text"
+                        placeholder="Recherche par mot clé..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="w-full bg-slate-900/70 border border-slate-800 focus:border-slate-700 hover:border-slate-850 rounded-xl pl-9 pr-8 py-2 text-xs text-slate-200 placeholder:text-slate-500 focus:outline-none transition-all"
+                      />
+                      {searchQuery && (
+                        <button
+                          onClick={() => setSearchQuery("")}
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 p-0.5 rounded-md"
+                          title="Effacer la recherche"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Sorting Dropdown */}
+                    <div className="flex items-center space-x-1.5 bg-slate-900/70 border border-slate-800 rounded-xl px-2.5 py-1.5 text-xs">
+                      <ArrowUpDown className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                      <select
+                        id="sort-select"
+                        value={`${sortField}-${sortOrder}`}
+                        onChange={(e) => {
+                          const [field, order] = e.target.value.split("-") as [SortField, SortOrder];
+                          setSortField(field);
+                          setSortOrder(order);
+                        }}
+                        className="bg-transparent text-slate-300 font-semibold focus:outline-none text-xs cursor-pointer"
+                      >
+                        <option value="date-desc" className="bg-slate-900 text-slate-200">Plus récent</option>
+                        <option value="date-asc" className="bg-slate-900 text-slate-200">Plus ancien</option>
+                        <option value="name-asc" className="bg-slate-900 text-slate-200">Nom (A ➔ Z)</option>
+                        <option value="name-desc" className="bg-slate-900 text-slate-200">Nom (Z ➔ A)</option>
+                        <option value="size-desc" className="bg-slate-900 text-slate-200">Taille (Grand)</option>
+                        <option value="size-asc" className="bg-slate-900 text-slate-200">Taille (Petit)</option>
+                      </select>
+                    </div>
 
                     <button
                       id="refresh-btn"
                       onClick={fetchFiles}
-                      className="flex items-center space-x-1.5 bg-slate-900 hover:bg-slate-850 border border-slate-800 hover:border-slate-700/80 text-slate-300 p-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                      className="flex items-center space-x-1.5 bg-slate-900 hover:bg-slate-850 border border-slate-800 hover:border-slate-700/80 text-slate-300 p-2 rounded-xl text-xs font-bold transition-all cursor-pointer min-h-[36px]"
                       title="Actualiser les fichiers"
                     >
                       <RefreshCw className={`h-3.5 w-3.5 text-emerald-400 ${isLoading ? "animate-spin" : ""}`} />
@@ -351,7 +431,7 @@ export default function App() {
                         Glissez un fichier dans la zone ci-dessus pour générer instantanément un code QR et le partager.
                       </p>
                     </motion.div>
-                  ) : filteredFiles.length === 0 ? (
+                  ) : processedFiles.length === 0 ? (
                     // Empty State (No search results)
                     <motion.div
                       id="empty-search"
@@ -359,12 +439,12 @@ export default function App() {
                       animate={{ opacity: 1 }}
                       className="py-12 text-center text-slate-400 text-xs"
                     >
-                      Aucun fichier ne correspond à votre recherche "{searchQuery}"
+                      Aucun fichier ne correspond à votre recherche par mot clé "{searchQuery}".
                     </motion.div>
                   ) : (
                     // Render List
                     <div className="flex flex-col gap-3">
-                      {filteredFiles.map((file) => (
+                      {processedFiles.map((file) => (
                         <FileListItem
                           key={file.id}
                           file={file}
@@ -376,6 +456,26 @@ export default function App() {
                   )}
                 </AnimatePresence>
               </section>
+            </motion.div>
+          ) : activeTab === 'trash' ? (
+            <motion.div
+              key="trash-tab"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.15 }}
+            >
+              <TrashBinTab token={token} onRestoreSuccess={fetchFiles} />
+            </motion.div>
+          ) : activeTab === 'history' ? (
+            <motion.div
+              key="history-tab"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.15 }}
+            >
+              <HistoryTab token={token} />
             </motion.div>
           ) : (
             <motion.div
