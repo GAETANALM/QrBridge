@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
-import { User as UserIcon, Lock, LogIn, UserPlus, AlertCircle, Eye, EyeOff, ShieldCheck, Heart, Hash } from "lucide-react";
+import { User as UserIcon, Lock, LogIn, UserPlus, AlertCircle, Eye, EyeOff, ShieldCheck, Heart } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { User, getApiUrl } from "../types";
+import { User } from "../types";
+import { apiLogin, apiRegister } from "../lib/api";
 
 interface AuthPageProps {
   onAuthSuccess: (user: User, token: string) => void;
@@ -45,38 +46,13 @@ export default function AuthPage({ onAuthSuccess }: AuthPageProps) {
     setLoading(true);
 
     try {
-      const endpoint = mode === 'login' ? '/api/auth/login' : '/api/auth/register';
-      const response = await fetch(getApiUrl(endpoint), {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ 
-          username: username.trim(), 
-          password 
-        })
-      });
-
-      let data: any = {};
-      const contentType = response.headers.get("content-type");
-      if (contentType && contentType.includes("application/json")) {
-        data = await response.json();
+      let result;
+      if (mode === 'login') {
+        result = await apiLogin(username.trim(), password);
       } else {
-        if (response.status === 404) {
-          throw new Error("Erreur 404 : Le serveur backend (server.ts) est introuvable. Sur Netlify, votre serveur Express doit être hébergé (ex: Render, Railway) et son URL configurée dans la variable d'environnement VITE_API_URL.");
-        }
-        const textStr = await response.text();
-        throw new Error(textStr || `Erreur de communication avec le serveur (${response.status})`);
+        result = await apiRegister(username.trim(), password);
       }
-
-      if (!response.ok) {
-        if (response.status === 404) {
-          throw new Error("Erreur 404 : Serveur API introuvable. Configurez VITE_API_URL sur Netlify avec l'URL de votre serveur backend.");
-        }
-        throw new Error(data.error || "Une erreur s'est produite lors de l'authentification.");
-      }
-
-      onAuthSuccess(data.user, data.token);
+      onAuthSuccess(result.user, result.token);
     } catch (err: any) {
       console.error(err);
       setError(err.message || "Impossible de se connecter.");

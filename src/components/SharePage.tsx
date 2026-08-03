@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { Download, FileText, ImageIcon, Music, Video, File, AlertCircle, Loader2, ArrowLeft, Heart } from "lucide-react";
 import { motion } from "motion/react";
-import { FileMetadata, getApiUrl } from "../types";
+import { FileMetadata } from "../types";
+import { apiGetFileMetadata, apiDownloadFile } from "../lib/api";
 
 interface SharePageProps {
   fileId: string;
@@ -12,33 +13,28 @@ export default function SharePage({ fileId, onGoToHome }: SharePageProps) {
   const [file, setFile] = useState<FileMetadata | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [contentUrl, setContentUrl] = useState<string | null>(null);
 
   useEffect(() => {
-    async function fetchFileMetadata() {
+    async function loadFileData() {
       try {
-        const response = await fetch(getApiUrl(`/api/files/${fileId}`));
-        if (!response.ok) {
-          if (response.status === 410) {
-            const errData = await response.json();
-            setFile({
-              id: fileId,
-              name: errData.name || "Fichier",
-              size: errData.size || 0,
-              type: errData.type || "application/octet-stream",
-              uploadedAt: "",
-              downloads: 0,
-              expiresAt: errData.expiresAt,
-            });
-            setError("expired");
-            return;
-          }
-          if (response.status === 404) {
-            throw new Error("Ce fichier n'existe plus ou est introuvable.");
-          }
-          throw new Error("Impossible de charger les détails du fichier.");
+        const metaRes = await apiGetFileMetadata(fileId);
+        if (metaRes.status === 410) {
+          if (metaRes.file) setFile(metaRes.file);
+          setError("expired");
+          setLoading(false);
+          return;
         }
-        const data = await response.json();
-        setFile(data);
+        if (metaRes.status === 404 || !metaRes.file) {
+          throw new Error("Ce fichier n'existe plus ou est introuvable.");
+        }
+        setFile(metaRes.file);
+
+        // Fetch download blob/data URL
+        const downloadRes = await apiDownloadFile(fileId);
+        if (downloadRes.status === 200 && downloadRes.blobUrl) {
+          setContentUrl(downloadRes.blobUrl);
+        }
       } catch (err: any) {
         console.error(err);
         setError(err.message || "Une erreur est survenue.");
@@ -47,7 +43,7 @@ export default function SharePage({ fileId, onGoToHome }: SharePageProps) {
       }
     }
 
-    fetchFileMetadata();
+    loadFileData();
   }, [fileId]);
 
   const getFormatSize = (bytes: number): string => {
@@ -80,10 +76,28 @@ export default function SharePage({ fileId, onGoToHome }: SharePageProps) {
     return type.startsWith("video/");
   };
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
     if (file && error !== "expired") {
-      // Trigger native browser download directly via the dedicated API endpoint
-      window.location.href = getApiUrl(`/api/download/${file.id}`);
+      let targetUrl = contentUrl;
+      if (!targetUrl) {
+        const res = await apiDownloadFile(file.id);
+        if (res.blobUrl) {
+          targetUrl = res.blobUrl;
+          setContentUrl(res.blobUrl);
+        }
+      }
+
+      if (targetUrl) {
+        const a = document.createElement("a");
+        a.href = targetUrl;
+        a.download = file.name;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      } else {
+        window.location.href = `/api/download/${file.id}`;
+      }
+
       // Increment download count locally for visual feel
       setFile((prev) => (prev ? { ...prev, downloads: prev.downloads + 1 } : null));
     }
@@ -213,8 +227,8 @@ export default function SharePage({ fileId, onGoToHome }: SharePageProps) {
     );
   }
 
-  // Define URLs
-  const downloadUrl = `/api/download/${file.id}`;
+  // Define preview URL
+  const previewUrl = contentUrl || `/api/download/${file.id}`;
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-between p-6">
@@ -269,7 +283,7 @@ export default function SharePage({ fileId, onGoToHome }: SharePageProps) {
             {isPreviewableImage(file.type) && (
               <div id="image-preview-container" className="w-full mt-6 bg-slate-950 border border-slate-800/80 rounded-2xl overflow-hidden p-2 group">
                 <img
-                  src={downloadUrl}
+                  src={previewUrl}
                   alt={file.name}
                   referrerPolicy="no-referrer"
                   className="w-full max-h-72 object-contain rounded-xl bg-slate-950 transition-transform duration-300 group-hover:scale-[1.01]"
@@ -280,13 +294,13 @@ export default function SharePage({ fileId, onGoToHome }: SharePageProps) {
             {isPreviewableAudio(file.type) && (
               <div id="audio-preview-container" className="w-full mt-6 bg-slate-950 border border-slate-800/80 rounded-2xl p-4 flex flex-col items-center">
                 <p className="text-xs text-slate-500 mb-2 font-mono">Aperçu Audio</p>
-                <audio controls src={downloadUrl} className="w-full h-10 accent-emerald-500" />
+                <audio controls src={previewUrl} className="w-full h-10 accent-emerald-500" />
               </div>
             )}
 
             {isPreviewableVideo(file.type) && (
               <div id="video-preview-container" className="w-full mt-6 bg-slate-950 border border-slate-800/80 rounded-2xl overflow-hidden p-2">
-                <video controls src={downloadUrl} className="w-full max-h-72 rounded-xl object-contain" />
+                <video controls src={previewUrl} className="w-full max-h-72 rounded-xl object-contain" />
               </div>
             )}
 

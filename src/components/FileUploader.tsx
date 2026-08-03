@@ -1,7 +1,8 @@
 import React, { useState, useRef } from "react";
 import { Upload, Loader2, AlertCircle, FileUp, Clock, Calendar } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { FileMetadata, getApiUrl } from "../types";
+import { FileMetadata } from "../types";
+import { apiUploadFile } from "../lib/api";
 
 interface FileUploaderProps {
   onUploadSuccess: (file: FileMetadata) => void;
@@ -95,28 +96,15 @@ export default function FileUploader({ onUploadSuccess }: FileUploaderProps) {
       const base64Content = reader.result as string;
 
       try {
-        const token = localStorage.getItem("qr_drive_token");
-        const response = await fetch(getApiUrl("/api/upload"), {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            ...(token ? { "Authorization": `Bearer ${token}` } : {}),
-          },
-          body: JSON.stringify({
-            name: file.name,
-            type: file.type,
-            size: file.size,
-            content: base64Content,
-            expiresAt,
-          }),
+        const token = localStorage.getItem("qr_drive_token") || "";
+        const uploadedFile = await apiUploadFile(token, {
+          name: file.name,
+          type: file.type,
+          size: file.size,
+          content: base64Content,
+          expiresAt,
         });
 
-        if (!response.ok) {
-          const errData = await response.json();
-          throw new Error(errData.error || "Une erreur est survenue lors de l'envoi.");
-        }
-
-        const uploadedFile = await response.json();
         setUploadProgress(100);
         
         // Brief delay for the 100% progress animation to be visible

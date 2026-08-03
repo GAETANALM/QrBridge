@@ -7,7 +7,8 @@ import QRCodeDialog from "./components/QRCodeDialog";
 import SharePage from "./components/SharePage";
 import AuthPage from "./components/AuthPage";
 import AdminUsersTab from "./components/AdminUsersTab";
-import { FileMetadata, AppRoute, User, getApiUrl } from "./types";
+import { FileMetadata, AppRoute, User } from "./types";
+import { apiGetMe, apiLogout, apiGetFiles, apiDeleteFile } from "./lib/api";
 
 export default function App() {
   const [route, setRoute] = useState<AppRoute>({ type: "admin" });
@@ -31,20 +32,10 @@ export default function App() {
       
       if (savedToken && savedUserStr) {
         try {
-          const res = await fetch(getApiUrl("/api/auth/me"), {
-            headers: {
-              "Authorization": `Bearer ${savedToken}`
-            }
-          });
-          if (res.ok) {
-            const data = await res.json();
-            setUser(data.user);
-            setToken(savedToken);
-            localStorage.setItem("qr_drive_user", JSON.stringify(data.user));
-          } else {
-            localStorage.removeItem("qr_drive_token");
-            localStorage.removeItem("qr_drive_user");
-          }
+          const verifiedUser = await apiGetMe(savedToken);
+          setUser(verifiedUser);
+          setToken(savedToken);
+          localStorage.setItem("qr_drive_user", JSON.stringify(verifiedUser));
         } catch (err) {
           console.error("Session verification failed:", err);
           localStorage.removeItem("qr_drive_token");
@@ -102,12 +93,7 @@ export default function App() {
 
     if (savedToken) {
       try {
-        await fetch(getApiUrl("/api/auth/logout"), {
-          method: "POST",
-          headers: {
-            "Authorization": `Bearer ${savedToken}`
-          }
-        });
+        await apiLogout(savedToken);
       } catch (err) {
         console.error("Logout request failed:", err);
       }
@@ -120,19 +106,7 @@ export default function App() {
     setIsLoading(true);
     setError(null);
     try {
-      const response = await fetch(getApiUrl("/api/files"), {
-        headers: {
-          "Authorization": `Bearer ${token}`
-        }
-      });
-      if (!response.ok) {
-        if (response.status === 411 || response.status === 401) {
-          handleLogout();
-          return;
-        }
-        throw new Error("Impossible de récupérer la liste des fichiers.");
-      }
-      const data = await response.json();
+      const data = await apiGetFiles(token);
       setFiles(data);
     } catch (err: any) {
       console.error(err);
@@ -158,22 +132,8 @@ export default function App() {
   const handleDeleteFile = async (id: string) => {
     if (window.confirm("Êtes-vous sûr de vouloir supprimer définitivement ce fichier ?")) {
       try {
-        const response = await fetch(getApiUrl(`/api/files/${id}`), {
-          method: "DELETE",
-          headers: {
-            "Authorization": `Bearer ${token}`
-          }
-        });
-
-        if (!response.ok) {
-          if (response.status === 401 || response.status === 411) {
-            handleLogout();
-            throw new Error("Session expirée. Veuillez vous reconnecter.");
-          }
-          const errData = await response.json();
-          throw new Error(errData.error || "Erreur lors de la suppression.");
-        }
-
+        if (!token) return;
+        await apiDeleteFile(token, id);
         // Filter out of local state
         setFiles((prev) => prev.filter((f) => f.id !== id));
       } catch (err: any) {

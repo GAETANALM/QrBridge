@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { User, Shield, User as UserIcon, Trash2, Calendar, Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { getApiUrl } from "../types";
+import { apiGetUsers, apiUpdateUserRole, apiDeleteUser } from "../lib/api";
 
 interface AdminUsersTabProps {
   currentUser: { id: string; username: string; role: 'admin' | 'user' } | null;
@@ -25,18 +25,8 @@ export default function AdminUsersTab({ currentUser }: AdminUsersTabProps) {
     setLoading(true);
     setError(null);
     try {
-      const token = localStorage.getItem("qr_drive_token");
-      const response = await fetch(getApiUrl("/api/admin/users"), {
-        headers: {
-          ...(token ? { "Authorization": `Bearer ${token}` } : {})
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error("Impossible de charger la liste des utilisateurs.");
-      }
-
-      const data = await response.json();
+      const token = localStorage.getItem("qr_drive_token") || "";
+      const data = await apiGetUsers(token);
       setUsers(data);
     } catch (err: any) {
       console.error(err);
@@ -62,21 +52,8 @@ export default function AdminUsersTab({ currentUser }: AdminUsersTabProps) {
     setSuccess(null);
 
     try {
-      const token = localStorage.getItem("qr_drive_token");
-      const response = await fetch(getApiUrl(`/api/admin/users/${userId}/role`), {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { "Authorization": `Bearer ${token}` } : {})
-        },
-        body: JSON.stringify({ role: newRole })
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Impossible de mettre à jour le rôle.");
-      }
+      const token = localStorage.getItem("qr_drive_token") || "";
+      await apiUpdateUserRole(token, userId, newRole);
 
       setUsers(prev => prev.map(u => u.id === userId ? { ...u, role: newRole } : u));
       setSuccess(`Rôle de l'utilisateur mis à jour en ${newRole === 'admin' ? 'Administrateur' : 'Utilisateur'}.`);
@@ -104,19 +81,8 @@ export default function AdminUsersTab({ currentUser }: AdminUsersTabProps) {
     setSuccess(null);
 
     try {
-      const token = localStorage.getItem("qr_drive_token");
-      const response = await fetch(getApiUrl(`/api/admin/users/${userId}`), {
-        method: "DELETE",
-        headers: {
-          ...(token ? { "Authorization": `Bearer ${token}` } : {})
-        }
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Impossible de supprimer l'utilisateur.");
-      }
+      const token = localStorage.getItem("qr_drive_token") || "";
+      await apiDeleteUser(token, userId);
 
       setUsers(prev => prev.filter(u => u.id !== userId));
       setSuccess(`Compte de "${fullName}" supprimé avec succès.`);
