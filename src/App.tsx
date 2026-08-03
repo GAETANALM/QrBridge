@@ -82,6 +82,7 @@ export default function App() {
     setToken(newToken);
     localStorage.setItem("qr_drive_token", newToken);
     localStorage.setItem("qr_drive_user", JSON.stringify(newUser));
+    localStorage.setItem("qr_drive_saved_account", newUser.username);
   };
 
   const handleLogout = async () => {

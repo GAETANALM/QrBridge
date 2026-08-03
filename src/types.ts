@@ -21,9 +21,3 @@ export type AppRoute =
   | { type: 'admin' }
   | { type: 'share'; fileId: string };
 
-export function getApiUrl(path: string): string {
-  const baseUrl = (((import.meta as any).env?.VITE_API_URL || "") as string).replace(/\/$/, "");
-  const cleanPath = path.startsWith("/") ? path : `/${path}`;
-  return `${baseUrl}${cleanPath}`;
-}
-
