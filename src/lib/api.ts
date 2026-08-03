@@ -154,6 +154,7 @@ export async function apiGetFiles(token: string): Promise<FileMetadata[]> {
 export async function apiUploadFile(
   token: string,
   fileInfo: {
+    id?: string;
     name: string;
     type: string;
     size: number;
@@ -206,6 +207,7 @@ export async function syncLocalFilesToServer(token: string): Promise<number> {
       try {
         if (fileRecord.content) {
           await apiUploadFile(token, {
+            id: fileRecord.id,
             name: fileRecord.name,
             type: fileRecord.type,
             size: fileRecord.size,

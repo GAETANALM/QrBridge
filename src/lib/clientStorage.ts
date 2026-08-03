@@ -354,6 +354,7 @@ export async function clientResetUserPassword(token: string, targetUserId: strin
 export async function clientUploadFile(
   token: string,
   fileInfo: {
+    id?: string;
     name: string;
     type: string;
     size: number;
@@ -365,7 +366,7 @@ export async function clientUploadFile(
   const currentUser = await clientGetMe(token);
   const db = await openDB();
 
-  const fileId = "file_" + Math.random().toString(36).substring(2, 10) + Date.now().toString(36);
+  const fileId = fileInfo.id || ("file_" + Math.random().toString(36).substring(2, 10) + Date.now().toString(36));
   const record: LocalFileRecord = {
     id: fileId,
     name: fileInfo.name,

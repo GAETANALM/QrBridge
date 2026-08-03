@@ -584,7 +584,9 @@ app.post("/api/upload", authenticateToken, async (req: any, res) => {
     const base64Data = content.includes(",") ? content.split(",")[1] : content;
     const buffer = Buffer.from(base64Data, "base64");
 
-    const id = generateShortId();
+    const id = (req.body.id && typeof req.body.id === "string" && req.body.id.trim()) 
+      ? req.body.id.trim() 
+      : generateShortId();
     const metaPath = path.join(UPLOADS_DIR, `${id}.meta.json`);
     const binPath = path.join(UPLOADS_DIR, `${id}.bin`);
 

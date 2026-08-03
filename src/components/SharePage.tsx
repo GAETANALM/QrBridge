@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { Download, FileText, ImageIcon, Music, Video, File, AlertCircle, Loader2, ArrowLeft, Heart, MessageSquare, Quote, X, Sparkles, Share2 } from "lucide-react";
-import { motion, AnimatePresence } from "motion/react";
+import { Download, FileText, ImageIcon, Music, Video, File, AlertCircle, Loader2, ArrowLeft, Heart, MessageSquare, Quote } from "lucide-react";
+import { motion } from "motion/react";
 import { FileMetadata } from "../types";
 import { apiGetFileMetadata, apiDownloadFile } from "../lib/api";
 
@@ -14,7 +14,6 @@ export default function SharePage({ fileId, onGoToHome }: SharePageProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [contentUrl, setContentUrl] = useState<string | null>(null);
-  const [showPromoPopup, setShowPromoPopup] = useState(false);
 
   useEffect(() => {
     async function loadFileData() {
@@ -245,16 +244,6 @@ export default function SharePage({ fileId, onGoToHome }: SharePageProps) {
           </div>
           <span className="font-bold tracking-tight text-lg">QR Drive</span>
         </button>
-
-        {/* Small header action for creating a QR Drive */}
-        <button
-          onClick={() => setShowPromoPopup(true)}
-          className="flex items-center space-x-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-emerald-400 py-1.5 px-3 rounded-xl text-xs font-semibold transition-all cursor-pointer"
-        >
-          <Sparkles className="h-3.5 w-3.5 text-emerald-400" />
-          <span className="hidden sm:inline">Partager un fichier ?</span>
-          <span className="sm:hidden">Partager</span>
-        </button>
       </header>
 
       {/* Main Content Area - Clean & Unobstructed */}
@@ -349,52 +338,6 @@ export default function SharePage({ fileId, onGoToHome }: SharePageProps) {
           </div>
         </motion.div>
       </main>
-
-      {/* Discrete Floating Popup Modal for 'Besoin de partager un fichier ?' */}
-      <AnimatePresence>
-        {showPromoPopup && (
-          <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9, y: 10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 10 }}
-              className="bg-slate-900 border border-emerald-500/30 rounded-3xl p-6 max-w-md w-full shadow-2xl relative text-center"
-            >
-              <button
-                onClick={() => setShowPromoPopup(false)}
-                className="absolute top-4 right-4 text-slate-400 hover:text-white p-1.5 rounded-xl hover:bg-slate-800 transition-colors"
-                title="Fermer la fenêtre"
-              >
-                <X className="h-5 w-5" />
-              </button>
-
-              <div className="p-3.5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-2xl w-14 h-14 flex items-center justify-center mx-auto mb-4">
-                <Share2 className="h-7 w-7" />
-              </div>
-
-              <h3 className="text-lg font-bold text-slate-100 mb-1">Besoin de partager un fichier ?</h3>
-              <p className="text-xs text-slate-400 mb-6 leading-relaxed">
-                Créez votre propre lien de partage sécurisé avec génération instantanée de QR Code.
-              </p>
-
-              <div className="flex flex-col sm:flex-row gap-2.5">
-                <button
-                  onClick={() => setShowPromoPopup(false)}
-                  className="w-full py-3 px-4 bg-slate-800 hover:bg-slate-750 text-slate-300 rounded-xl font-semibold text-xs transition-all cursor-pointer"
-                >
-                  Fermer
-                </button>
-                <button
-                  onClick={onGoToHome}
-                  className="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold text-xs transition-all cursor-pointer shadow-lg shadow-emerald-950/50"
-                >
-                  Créer un QR Drive
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
 
       {/* Footer */}
       <footer className="text-center text-slate-500 text-xs py-6 border-t border-slate-900/80 max-w-4xl w-full mx-auto mt-8 flex items-center justify-between">
