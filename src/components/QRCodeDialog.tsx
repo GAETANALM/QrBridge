@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { X, Copy, Check, Download, ExternalLink, QrCode, Share2, Clipboard } from "lucide-react";
+import { X, Copy, Check, Download, ExternalLink, QrCode, Share2, Clipboard, MessageSquare } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import QRCode from "qrcode";
 import { FileMetadata } from "../types";
@@ -106,9 +106,13 @@ export default function QRCodeDialog({ file, onClose }: QRCodeDialogProps) {
   const handleShare = async () => {
     if (navigator.share) {
       try {
+        const shareText = file.message 
+          ? `Message: "${file.message}"\nScannez ou cliquez pour accéder au fichier "${file.name}" :`
+          : `Scannez ou cliquez pour accéder au fichier "${file.name}" :`;
+
         await navigator.share({
           title: `QR Drive - ${file.name}`,
-          text: `Scannez ou cliquez pour accéder au fichier "${file.name}" :`,
+          text: shareText,
           url: shareUrl,
         });
       } catch (err) {
@@ -164,7 +168,7 @@ export default function QRCodeDialog({ file, onClose }: QRCodeDialogProps) {
             {/* Body */}
             <div className="p-4 sm:p-6 flex flex-col items-center overflow-y-auto">
               {/* File info banner */}
-              <div className="w-full text-center mb-4">
+              <div className="w-full text-center mb-3">
                 <p className="text-sm font-bold text-slate-200 line-clamp-1 break-all px-2">
                   {file.name}
                 </p>
@@ -172,6 +176,19 @@ export default function QRCodeDialog({ file, onClose }: QRCodeDialogProps) {
                   {(file.size / (1024 * 1024)).toFixed(2)} Mo • Scan ou téléchargement
                 </p>
               </div>
+
+              {/* Message attached to QR Code preview */}
+              {file.message && (
+                <div className="w-full mb-4 bg-emerald-950/30 border border-emerald-500/20 rounded-xl p-2.5 text-left text-xs">
+                  <div className="flex items-center space-x-1.5 text-emerald-400 font-bold mb-1">
+                    <MessageSquare className="h-3.5 w-3.5 shrink-0" />
+                    <span>Message inclus :</span>
+                  </div>
+                  <p className="text-slate-300 italic line-clamp-2 leading-relaxed">
+                    "{file.message}"
+                  </p>
+                </div>
+              )}
 
               {/* QR Code Container */}
               <div className="bg-white p-3 rounded-2xl shadow-inner border border-slate-700/50 mb-5 relative group overflow-hidden shrink-0">

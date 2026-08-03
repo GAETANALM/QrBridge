@@ -6,6 +6,7 @@ export interface FileMetadata {
   uploadedAt: string;
   downloads: number;
   expiresAt?: string | null;
+  message?: string | null;
   ownerId?: string;
   ownerUsername?: string;
   inTrash?: boolean;

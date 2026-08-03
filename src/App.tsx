@@ -10,7 +10,7 @@ import AdminUsersTab from "./components/AdminUsersTab";
 import TrashBinTab from "./components/TrashBinTab";
 import HistoryTab from "./components/HistoryTab";
 import { FileMetadata, AppRoute, User, SortField, SortOrder } from "./types";
-import { apiGetMe, apiLogout, apiGetFiles, apiDeleteFile } from "./lib/api";
+import { apiGetMe, apiLogout, apiGetFiles, apiDeleteFile, syncLocalFilesToServer } from "./lib/api";
 
 export default function App() {
   const [route, setRoute] = useState<AppRoute>({ type: "admin" });
@@ -42,6 +42,8 @@ export default function App() {
           setUser(verifiedUser);
           setToken(savedToken);
           localStorage.setItem("qr_drive_user", JSON.stringify(verifiedUser));
+          // Auto sync any local offline files to central account
+          await syncLocalFilesToServer(savedToken);
         } catch (err) {
           // Token is stale or invalid - clean up local auth state silently
           localStorage.removeItem("qr_drive_token");
@@ -83,12 +85,15 @@ export default function App() {
     setRoute(newRoute);
   };
 
-  const handleAuthSuccess = (newUser: User, newToken: string) => {
+  const handleAuthSuccess = async (newUser: User, newToken: string) => {
     setUser(newUser);
     setToken(newToken);
     localStorage.setItem("qr_drive_token", newToken);
     localStorage.setItem("qr_drive_user", JSON.stringify(newUser));
     localStorage.setItem("qr_drive_saved_account", newUser.username);
+    // Auto sync any local offline files to central user account
+    await syncLocalFilesToServer(newToken);
+    fetchFiles(newToken);
   };
 
   const handleLogout = async () => {
@@ -110,15 +115,20 @@ export default function App() {
   };
 
   // Fetch files list on mount (only if in admin/dashboard mode and authenticated)
-  const fetchFiles = async () => {
-    if (!token) return;
+  const fetchFiles = async (overrideToken?: string) => {
+    const activeToken = overrideToken || token;
+    if (!activeToken) return;
     setIsLoading(true);
     setError(null);
     try {
-      const data = await apiGetFiles(token);
+      const data = await apiGetFiles(activeToken);
       setFiles(data);
     } catch (err: any) {
       console.error(err);
+      if (err.message === "Session expirée") {
+        handleLogout();
+        return;
+      }
       setError(err.message || "Erreur de connexion avec le serveur.");
     } finally {
       setIsLoading(false);

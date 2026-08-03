@@ -61,8 +61,39 @@ async function logActivity(entry: {
   }
 }
 
-// Session storage in memory (token -> user info)
-const SESSIONS = new Map<string, { id: string; username: string; role: 'admin' | 'user' }>();
+const SESSIONS_FILE = path.join(UPLOADS_DIR, "sessions.json");
+
+function loadSessionsSync(): Map<string, { id: string; username: string; role: 'admin' | 'user' }> {
+  const map = new Map<string, { id: string; username: string; role: 'admin' | 'user' }>();
+  if (fs.existsSync(SESSIONS_FILE)) {
+    try {
+      const data = fs.readFileSync(SESSIONS_FILE, "utf-8");
+      const list = JSON.parse(data);
+      if (Array.isArray(list)) {
+        for (const item of list) {
+          if (item.token && item.user) {
+            map.set(item.token, item.user);
+          }
+        }
+      }
+    } catch (e) {
+      console.error("Error loading sessions from disk:", e);
+    }
+  }
+  return map;
+}
+
+async function saveSessionsToFile(map: Map<string, { id: string; username: string; role: 'admin' | 'user' }>): Promise<void> {
+  try {
+    const list = Array.from(map.entries()).map(([token, user]) => ({ token, user }));
+    await fs.promises.writeFile(SESSIONS_FILE, JSON.stringify(list, null, 2));
+  } catch (e) {
+    console.error("Error saving sessions to disk:", e);
+  }
+}
+
+// Session storage persisted to disk
+const SESSIONS = loadSessionsSync();
 
 function hashPassword(password: string): string {
   return crypto.createHmac("sha256", PASSWORD_SALT).update(password).digest("hex");
@@ -236,6 +267,7 @@ app.post("/api/auth/register", async (req, res) => {
     const token = crypto.randomBytes(32).toString("hex");
     const userSession = { id: newUser.id, username: newUser.username, role: newUser.role as 'admin' | 'user' };
     SESSIONS.set(token, userSession);
+    await saveSessionsToFile(SESSIONS);
 
     res.status(201).json({
       token,
@@ -290,6 +322,7 @@ app.post("/api/auth/login", async (req, res) => {
     const token = crypto.randomBytes(32).toString("hex");
     const userSession = { id: user.id, username: user.username, role: user.role as 'admin' | 'user' };
     SESSIONS.set(token, userSession);
+    await saveSessionsToFile(SESSIONS);
 
     res.json({
       token,
@@ -317,6 +350,7 @@ app.post("/api/auth/logout", async (req, res) => {
   const token = authHeader && authHeader.split(" ")[1];
   if (token) {
     SESSIONS.delete(token);
+    await saveSessionsToFile(SESSIONS);
   }
   res.json({ success: true });
 });
@@ -540,7 +574,7 @@ app.post("/api/admin/users/:id/reset-password", authenticateToken, requireAdmin,
 // 1. Upload a file (Authenticated)
 app.post("/api/upload", authenticateToken, async (req: any, res) => {
   try {
-    const { name, type, size, content, expiresAt } = req.body;
+    const { name, type, size, content, expiresAt, message } = req.body;
 
     if (!name || !content) {
       return res.status(400).json({ error: "Nom du fichier et contenu requis." });
@@ -562,6 +596,7 @@ app.post("/api/upload", authenticateToken, async (req: any, res) => {
       uploadedAt: new Date().toISOString(),
       downloads: 0,
       expiresAt: expiresAt || null,
+      message: message && typeof message === "string" ? message.trim() : null,
       ownerId: req.user.id,
       ownerUsername: req.user.username || 'utilisateur',
     };

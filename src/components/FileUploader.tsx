@@ -1,5 +1,5 @@
 import React, { useState, useRef } from "react";
-import { Upload, Loader2, AlertCircle, FileUp, Clock, Calendar } from "lucide-react";
+import { Upload, Loader2, AlertCircle, FileUp, Clock, Calendar, MessageSquare, X } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { FileMetadata } from "../types";
 import { apiUploadFile } from "../lib/api";
@@ -15,6 +15,7 @@ export default function FileUploader({ onUploadSuccess }: FileUploaderProps) {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [expirationType, setExpirationType] = useState<'never' | '10m' | '1h' | '1d' | '7d' | 'custom'>('never');
   const [customExpiryDate, setCustomExpiryDate] = useState<string>("");
+  const [customMessage, setCustomMessage] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -103,6 +104,7 @@ export default function FileUploader({ onUploadSuccess }: FileUploaderProps) {
           size: file.size,
           content: base64Content,
           expiresAt,
+          message: customMessage.trim() || null,
         });
 
         setUploadProgress(100);
@@ -111,6 +113,7 @@ export default function FileUploader({ onUploadSuccess }: FileUploaderProps) {
         setTimeout(() => {
           setIsUploading(false);
           setUploadProgress(0);
+          setCustomMessage("");
           onUploadSuccess(uploadedFile);
         }, 600);
 
@@ -187,74 +190,109 @@ export default function FileUploader({ onUploadSuccess }: FileUploaderProps) {
         )}
       </motion.div>
 
-      {/* Expiration Settings Container */}
+      {/* Settings Container (Expiration & Custom Message) */}
       {!isUploading && (
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mt-3.5 bg-slate-900/40 border border-slate-800/70 rounded-2xl p-3.5 sm:p-5"
+          className="mt-3.5 bg-slate-900/40 border border-slate-800/70 rounded-2xl p-3.5 sm:p-5 space-y-4"
         >
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center space-x-2 text-slate-300">
-              <Clock className="h-4 w-4 text-emerald-400 shrink-0" />
-              <h4 className="text-xs sm:text-sm font-bold">Durée de validité du QR Code</h4>
+          {/* Custom Message Field */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center space-x-2 text-slate-300">
+                <MessageSquare className="h-4 w-4 text-emerald-400 shrink-0" />
+                <h4 className="text-xs sm:text-sm font-bold">Message accompagné avec le QR Code (optionnel)</h4>
+              </div>
+              <span className="text-[10px] text-slate-500 font-mono">
+                {customMessage.length}/300
+              </span>
             </div>
-            <span className="text-[10px] bg-emerald-500/10 text-emerald-400 font-bold border border-emerald-500/20 py-0.5 px-2 rounded-full">
-              {expirationType === "never" && "Permanent"}
-              {expirationType === "10m" && "Expire dans 10 min"}
-              {expirationType === "1h" && "Expire dans 1 heure"}
-              {expirationType === "1d" && "Expire dans 1 jour"}
-              {expirationType === "7d" && "Expire dans 7 jours"}
-              {expirationType === "custom" && "Date personnalisée"}
-            </span>
-          </div>
-          
-          <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
-            {[
-              { value: "never", label: "Permanent" },
-              { value: "10m", label: "10 min" },
-              { value: "1h", label: "1 heure" },
-              { value: "1d", label: "1 jour" },
-              { value: "7d", label: "7 jours" },
-              { value: "custom", label: "Perso" },
-            ].map((opt) => (
-              <button
-                key={opt.value}
-                type="button"
-                onClick={() => setExpirationType(opt.value as any)}
-                className={`py-2.5 px-1 text-center rounded-xl text-xs font-bold transition-all border cursor-pointer min-h-[44px] flex items-center justify-center active:scale-95 ${
-                  expirationType === opt.value
-                    ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40 shadow-sm"
-                    : "bg-slate-950/60 text-slate-400 border-slate-800 hover:border-slate-700 hover:text-slate-300"
-                }`}
-              >
-                {opt.label}
-              </button>
-            ))}
+            <div className="relative">
+              <textarea
+                value={customMessage}
+                onChange={(e) => setCustomMessage(e.target.value.slice(0, 300))}
+                rows={2}
+                placeholder="Ajoutez une note, une consigne ou des instructions qui s'afficheront lors du scan du QR code..."
+                className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500/60 rounded-xl p-3 text-xs text-slate-200 placeholder:text-slate-600 focus:outline-none transition-all resize-none"
+              />
+              {customMessage && (
+                <button
+                  type="button"
+                  onClick={() => setCustomMessage("")}
+                  className="absolute right-2.5 top-2.5 text-slate-500 hover:text-slate-300 p-1 rounded-md transition-colors"
+                  title="Effacer le message"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
           </div>
 
-          <AnimatePresence>
-            {expirationType === "custom" && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                exit={{ opacity: 0, height: 0 }}
-                className="mt-3.5 pt-3.5 border-t border-slate-800/60 flex flex-col sm:flex-row sm:items-center gap-2.5 overflow-hidden"
-              >
-                <div className="flex items-center space-x-2 text-xs text-slate-400 shrink-0">
-                  <Calendar className="h-4 w-4 text-emerald-400" />
-                  <span>Date et heure d'expiration :</span>
-                </div>
-                <input
-                  type="datetime-local"
-                  value={customExpiryDate}
-                  onChange={(e) => setCustomExpiryDate(e.target.value)}
-                  min={new Date().toISOString().substring(0, 16)}
-                  className="bg-slate-950 border border-slate-800 focus:border-emerald-500/50 rounded-xl px-3 py-2.5 text-base sm:text-xs text-slate-200 focus:outline-none w-full sm:max-w-xs min-h-[44px]"
-                />
-              </motion.div>
-            )}
-          </AnimatePresence>
+          {/* Expiration Settings */}
+          <div className="pt-3 border-t border-slate-800/60">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center space-x-2 text-slate-300">
+                <Clock className="h-4 w-4 text-emerald-400 shrink-0" />
+                <h4 className="text-xs sm:text-sm font-bold">Durée de validité du QR Code</h4>
+              </div>
+              <span className="text-[10px] bg-emerald-500/10 text-emerald-400 font-bold border border-emerald-500/20 py-0.5 px-2 rounded-full">
+                {expirationType === "never" && "Permanent"}
+                {expirationType === "10m" && "Expire dans 10 min"}
+                {expirationType === "1h" && "Expire dans 1 heure"}
+                {expirationType === "1d" && "Expire dans 1 jour"}
+                {expirationType === "7d" && "Expire dans 7 jours"}
+                {expirationType === "custom" && "Date personnalisée"}
+              </span>
+            </div>
+            
+            <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+              {[
+                { value: "never", label: "Permanent" },
+                { value: "10m", label: "10 min" },
+                { value: "1h", label: "1 heure" },
+                { value: "1d", label: "1 jour" },
+                { value: "7d", label: "7 jours" },
+                { value: "custom", label: "Perso" },
+              ].map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setExpirationType(opt.value as any)}
+                  className={`py-2.5 px-1 text-center rounded-xl text-xs font-bold transition-all border cursor-pointer min-h-[44px] flex items-center justify-center active:scale-95 ${
+                    expirationType === opt.value
+                      ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40 shadow-sm"
+                      : "bg-slate-950/60 text-slate-400 border-slate-800 hover:border-slate-700 hover:text-slate-300"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+
+            <AnimatePresence>
+              {expirationType === "custom" && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="mt-3.5 pt-3.5 border-t border-slate-800/60 flex flex-col sm:flex-row sm:items-center gap-2.5 overflow-hidden"
+                >
+                  <div className="flex items-center space-x-2 text-xs text-slate-400 shrink-0">
+                    <Calendar className="h-4 w-4 text-emerald-400" />
+                    <span>Date et heure d'expiration :</span>
+                  </div>
+                  <input
+                    type="datetime-local"
+                    value={customExpiryDate}
+                    onChange={(e) => setCustomExpiryDate(e.target.value)}
+                    min={new Date().toISOString().substring(0, 16)}
+                    className="bg-slate-950 border border-slate-800 focus:border-emerald-500/50 rounded-xl px-3 py-2.5 text-base sm:text-xs text-slate-200 focus:outline-none w-full sm:max-w-xs min-h-[44px]"
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
         </motion.div>
       )}
 

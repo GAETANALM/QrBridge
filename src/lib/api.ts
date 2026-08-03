@@ -48,7 +48,7 @@ export async function apiLogin(username: string, password: string): Promise<{ us
     const data = await res.json().catch(() => ({}));
     throw new Error(data.error || `Erreur de connexion (${res.status})`);
   } catch (err: any) {
-    if (err.message && err.message.includes("Identifiants incorrects")) {
+    if (err.message && (err.message.includes("Identifiants") || err.message.includes("requis") || err.message.includes("code") || err.message.includes("Erreur de connexion"))) {
       throw err;
     }
     // Network or server unreachable -> Fallback to client storage
@@ -75,7 +75,7 @@ export async function apiRegister(username: string, password: string): Promise<{
     const data = await res.json().catch(() => ({}));
     throw new Error(data.error || `Erreur d'inscription (${res.status})`);
   } catch (err: any) {
-    if (err.message && (err.message.includes("utilisé") || err.message.includes("code"))) {
+    if (err.message && (err.message.includes("utilisé") || err.message.includes("code") || err.message.includes("Erreur d'inscription"))) {
       throw err;
     }
     return await clientRegister(username, password);
@@ -93,12 +93,19 @@ export async function apiGetMe(token: string): Promise<User> {
       return data.user;
     }
 
+    if (res.status === 401) {
+      throw new Error("Session expirée");
+    }
+
     if (res.status === 404) {
       return await clientGetMe(token);
     }
 
     throw new Error("Session invalide");
-  } catch (err) {
+  } catch (err: any) {
+    if (err.message === "Session expirée" || err.message === "Session invalide") {
+      throw err;
+    }
     return await clientGetMe(token);
   }
 }
@@ -127,12 +134,17 @@ export async function apiGetFiles(token: string): Promise<FileMetadata[]> {
       return await res.json();
     }
 
+    if (res.status === 401) {
+      throw new Error("Session expirée");
+    }
+
     if (res.status === 404) {
       return await clientGetFiles(token);
     }
 
     throw new Error("Impossible de récupérer la liste des fichiers.");
-  } catch (err) {
+  } catch (err: any) {
+    if (err.message === "Session expirée") throw err;
     return await clientGetFiles(token);
   }
 }
@@ -145,6 +157,7 @@ export async function apiUploadFile(
     size: number;
     content: string;
     expiresAt?: string | null;
+    message?: string | null;
   }
 ): Promise<FileMetadata> {
   try {
@@ -161,6 +174,10 @@ export async function apiUploadFile(
       return await res.json();
     }
 
+    if (res.status === 401) {
+      throw new Error("Session expirée");
+    }
+
     if (res.status === 404) {
       return await clientUploadFile(token, fileInfo);
     }
@@ -168,8 +185,45 @@ export async function apiUploadFile(
     const errData = await res.json().catch(() => ({}));
     throw new Error(errData.error || "Erreur d'envoi");
   } catch (err: any) {
-    if (err.message && err.message.includes("Erreur")) throw err;
+    if (err.message === "Session expirée" || (err.message && err.message.includes("Erreur"))) throw err;
     return await clientUploadFile(token, fileInfo);
+  }
+}
+
+/**
+ * Automatically uploads any local IndexedDB files to the central server
+ * whenever the user connects/logs in, ensuring synchronization across all devices.
+ */
+export async function syncLocalFilesToServer(token: string): Promise<number> {
+  try {
+    const localFiles = await clientGetFiles(token);
+    if (!localFiles || localFiles.length === 0) return 0;
+
+    let syncedCount = 0;
+    for (const fileMeta of localFiles) {
+      try {
+        const fileData = await clientGetFileContent(fileMeta.id);
+        if (fileData.status === 200 && fileData.record && fileData.record.content) {
+          await apiUploadFile(token, {
+            name: fileMeta.name,
+            type: fileMeta.type,
+            size: fileMeta.size,
+            content: fileData.record.content,
+            expiresAt: fileMeta.expiresAt,
+            message: fileMeta.message,
+          });
+          // Remove from local storage once synced to central server
+          await clientDeleteFile(token, fileMeta.id, true);
+          syncedCount++;
+        }
+      } catch (e) {
+        console.error(`Erreur de synchronisation locale pour ${fileMeta.name}:`, e);
+      }
+    }
+    return syncedCount;
+  } catch (err) {
+    console.error("Erreur lors de la synchronisation des fichiers locaux:", err);
+    return 0;
   }
 }
 

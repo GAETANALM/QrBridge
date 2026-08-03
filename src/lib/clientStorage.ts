@@ -349,6 +349,7 @@ export async function clientUploadFile(
     size: number;
     content: string; // base64
     expiresAt?: string | null;
+    message?: string | null;
   }
 ): Promise<FileMetadata> {
   const currentUser = await clientGetMe(token);
@@ -364,6 +365,7 @@ export async function clientUploadFile(
     uploadedAt: new Date().toISOString(),
     downloads: 0,
     expiresAt: fileInfo.expiresAt || null,
+    message: fileInfo.message ? fileInfo.message.trim() : null,
     ownerId: currentUser.id,
     ownerUsername: currentUser.username,
   };

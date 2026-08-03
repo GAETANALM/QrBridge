@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { FileText, ImageIcon, Music, Video, File, QrCode, Copy, Check, Trash2, Clock, AlertTriangle, Loader2 } from "lucide-react";
+import { FileText, ImageIcon, Music, Video, File, QrCode, Copy, Check, Trash2, Clock, AlertTriangle, Loader2, MessageSquare } from "lucide-react";
 import { motion } from "motion/react";
 import { FileMetadata } from "../types";
 
@@ -138,6 +138,16 @@ export default function FileListItem({ file, onOpenQR, onDelete }: FileListItemP
                 <span className="bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded-full text-[10px] font-semibold border border-emerald-500/10">
                   {file.downloads} {file.downloads > 1 ? "téléchargements" : "téléchargement"}
                 </span>
+              </>
+            )}
+
+            {file.message && (
+              <>
+                <span className="text-slate-700">•</span>
+                <div className="flex items-center space-x-1 text-emerald-400 text-[11px] font-medium bg-emerald-950/40 border border-emerald-500/20 px-2 py-0.5 rounded-md truncate max-w-[200px]" title={`Message: ${file.message}`}>
+                  <MessageSquare className="h-3 w-3 shrink-0" />
+                  <span className="truncate italic">"{file.message}"</span>
+                </div>
               </>
             )}
           </div>
