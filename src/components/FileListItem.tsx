@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { FileText, ImageIcon, Music, Video, File, QrCode, Copy, Check, Trash2, Clock, AlertTriangle } from "lucide-react";
+import { FileText, ImageIcon, Music, Video, File, QrCode, Copy, Check, Trash2, Clock, AlertTriangle, Loader2 } from "lucide-react";
 import { motion } from "motion/react";
 import { FileMetadata } from "../types";
 
@@ -12,6 +12,18 @@ interface FileListItemProps {
 
 export default function FileListItem({ file, onOpenQR, onDelete }: FileListItemProps): React.JSX.Element {
   const [copied, setCopied] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const handleDelete = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (isDeleting) return;
+    setIsDeleting(true);
+    try {
+      await onDelete(file.id);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   // Check if file has expired
   const isExpired = file.expiresAt ? new Date() > new Date(file.expiresAt) : false;
@@ -181,11 +193,16 @@ export default function FileListItem({ file, onOpenQR, onDelete }: FileListItemP
         {/* Delete button */}
         <button
           id={`delete-btn-${file.id}`}
-          onClick={() => onDelete(file.id)}
-          className="p-2.5 bg-slate-850 hover:bg-red-950/30 text-slate-400 hover:text-red-400 border border-slate-800 hover:border-red-900/45 rounded-xl transition-all cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center active:scale-95"
+          onClick={handleDelete}
+          disabled={isDeleting}
+          className="p-2.5 bg-slate-850 hover:bg-red-950/30 text-slate-400 hover:text-red-400 border border-slate-800 hover:border-red-900/45 rounded-xl transition-all cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center active:scale-95 disabled:opacity-50"
           title="Supprimer définitivement"
         >
-          <Trash2 className="h-4 w-4" />
+          {isDeleting ? (
+            <Loader2 className="h-4 w-4 animate-spin text-red-400" />
+          ) : (
+            <Trash2 className="h-4 w-4" />
+          )}
         </button>
       </div>
     </motion.div>

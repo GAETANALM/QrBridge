@@ -1,10 +1,37 @@
 import React, { useEffect, useState } from "react";
-import { User, Shield, User as UserIcon, Trash2, Calendar, Loader2, AlertCircle, CheckCircle2, KeyRound, Copy, Check, RefreshCw, X } from "lucide-react";
+import { 
+  Shield, 
+  User as UserIcon, 
+  Trash2, 
+  Calendar, 
+  Loader2, 
+  AlertCircle, 
+  CheckCircle2, 
+  KeyRound, 
+  Copy, 
+  Check, 
+  RefreshCw, 
+  X,
+  Pencil,
+  FolderKey,
+  FileText,
+  QrCode
+} from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { apiGetUsers, apiUpdateUserRole, apiDeleteUser, apiResetUserPassword } from "../lib/api";
+import { 
+  apiGetUsers, 
+  apiUpdateUserRole, 
+  apiUpdateUserProfile, 
+  apiDeleteUser, 
+  apiResetUserPassword,
+  apiGetFiles,
+  apiDeleteFile
+} from "../lib/api";
+import { FileMetadata } from "../types";
 
 interface AdminUsersTabProps {
   currentUser: { id: string; username: string; role: 'admin' | 'user' } | null;
+  onOpenQR?: (file: FileMetadata) => void;
 }
 
 interface UserData {
@@ -14,8 +41,9 @@ interface UserData {
   createdAt: string;
 }
 
-export default function AdminUsersTab({ currentUser }: AdminUsersTabProps) {
+export default function AdminUsersTab({ currentUser, onOpenQR }: AdminUsersTabProps) {
   const [users, setUsers] = useState<UserData[]>([]);
+  const [files, setFiles] = useState<FileMetadata[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -28,25 +56,41 @@ export default function AdminUsersTab({ currentUser }: AdminUsersTabProps) {
   const [resultPasscode, setResultPasscode] = useState<{ username: string; code: string } | null>(null);
   const [copiedCode, setCopiedCode] = useState(false);
 
-  const fetchUsers = async () => {
+  // Profile Edit modal states
+  const [editModalUser, setEditModalUser] = useState<UserData | null>(null);
+  const [editUsername, setEditUsername] = useState<string>("");
+  const [editRole, setEditRole] = useState<'admin' | 'user'>('user');
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+
+  // View User Files modal states
+  const [viewFilesUser, setViewFilesUser] = useState<UserData | null>(null);
+  const [copiedFileId, setCopiedFileId] = useState<string | null>(null);
+  const [deletingFileId, setDeletingFileId] = useState<string | null>(null);
+
+  const fetchUsersAndFiles = async () => {
     setLoading(true);
     setError(null);
     try {
       const token = localStorage.getItem("qr_drive_token") || "";
-      const data = await apiGetUsers(token);
-      setUsers(data);
+      const [usersData, filesData] = await Promise.all([
+        apiGetUsers(token),
+        apiGetFiles(token)
+      ]);
+      setUsers(usersData);
+      setFiles(filesData);
     } catch (err: any) {
       console.error(err);
-      setError(err.message || "Erreur lors du chargement des utilisateurs.");
+      setError(err.message || "Erreur lors du chargement des données.");
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchUsers();
+    fetchUsersAndFiles();
   }, []);
 
+  // --- Reset Password Handlers ---
   const handleOpenResetModal = (u: UserData) => {
     const randomCode = Math.floor(100000 + Math.random() * 900000).toString();
     setCustomPasscode(randomCode);
@@ -99,6 +143,48 @@ export default function AdminUsersTab({ currentUser }: AdminUsersTabProps) {
     }
   };
 
+  // --- Profile Edit Handlers ---
+  const handleOpenEditModal = (u: UserData) => {
+    setEditModalUser(u);
+    setEditUsername(u.username);
+    setEditRole(u.role);
+  };
+
+  const handleSaveProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editModalUser) return;
+
+    if (!editUsername.trim() || editUsername.trim().length < 2) {
+      setError("L'identifiant doit contenir au moins 2 caractères.");
+      return;
+    }
+
+    setIsSavingProfile(true);
+    setError(null);
+
+    try {
+      const token = localStorage.getItem("qr_drive_token") || "";
+      const updatedUser = await apiUpdateUserProfile(token, editModalUser.id, {
+        username: editUsername.trim(),
+        role: editRole,
+      });
+
+      setUsers(prev => prev.map(u => u.id === editModalUser.id ? { ...u, username: updatedUser.username, role: updatedUser.role } : u));
+      // Update files list metadata if username changed
+      setFiles(prev => prev.map(f => f.ownerId === editModalUser.id ? { ...f, ownerUsername: updatedUser.username } : f));
+
+      setSuccess(`Profil de "${updatedUser.username}" mis à jour avec succès.`);
+      setTimeout(() => setSuccess(null), 3000);
+      setEditModalUser(null);
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || "Erreur lors de la mise à jour du profil.");
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
+
+  // --- Role Quick Toggle ---
   const handleToggleRole = async (userId: string, currentRole: 'admin' | 'user') => {
     if (userId === currentUser?.id) {
       setError("Vous ne pouvez pas modifier votre propre rôle.");
@@ -131,7 +217,7 @@ export default function AdminUsersTab({ currentUser }: AdminUsersTabProps) {
       return;
     }
 
-    if (!window.confirm(`Êtes-vous sûr de vouloir supprimer définitivement le compte de "${fullName}" ? Tous ses fichiers seront également inaccessibles si vous les supprimez.`)) {
+    if (!window.confirm(`Êtes-vous sûr de vouloir supprimer définitivement le compte de "${fullName}" ?`)) {
       return;
     }
 
@@ -154,6 +240,38 @@ export default function AdminUsersTab({ currentUser }: AdminUsersTabProps) {
     }
   };
 
+  // --- File deletion in modal ---
+  const handleDeleteUserFile = async (fileId: string, fileName: string) => {
+    if (!window.confirm(`Supprimer définitivement le fichier "${fileName}" ?`)) {
+      return;
+    }
+
+    setDeletingFileId(fileId);
+    try {
+      const token = localStorage.getItem("qr_drive_token") || "";
+      await apiDeleteFile(token, fileId);
+      setFiles(prev => prev.filter(f => f.id !== fileId));
+      setSuccess(`Fichier "${fileName}" supprimé.`);
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (e: any) {
+      console.error(e);
+      setError(e.message || "Erreur lors de la suppression du fichier.");
+    } finally {
+      setDeletingFileId(null);
+    }
+  };
+
+  const handleCopyLink = async (fileId: string) => {
+    const url = `${window.location.origin}/share/${fileId}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedFileId(fileId);
+      setTimeout(() => setCopiedFileId(null), 2000);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   const formatDate = (isoString: string): string => {
     try {
       const date = new Date(isoString);
@@ -171,7 +289,7 @@ export default function AdminUsersTab({ currentUser }: AdminUsersTabProps) {
     return (
       <div className="flex flex-col items-center justify-center py-12">
         <Loader2 className="h-8 w-8 text-emerald-500 animate-spin" />
-        <p className="text-slate-400 text-xs mt-3 font-semibold animate-pulse">Chargement des utilisateurs...</p>
+        <p className="text-slate-400 text-xs mt-3 font-semibold animate-pulse">Chargement de l'administration...</p>
       </div>
     );
   }
@@ -180,16 +298,17 @@ export default function AdminUsersTab({ currentUser }: AdminUsersTabProps) {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h3 className="text-base font-bold text-slate-200">Gestion des Comptes</h3>
+          <h3 className="text-base font-bold text-slate-200">Gestion des Comptes & Fichiers</h3>
           <p className="text-xs text-slate-400 mt-1">
-            Administrez les rôles, régénérez les mots de passe et supprimez les comptes utilisateurs.
+            Éditez les identifiants, réinitialisez les mots de passe et inspectez les fichiers partagés par chaque utilisateur.
           </p>
         </div>
         <button
-          onClick={fetchUsers}
-          className="text-xs font-semibold px-4 py-2 bg-slate-900 hover:bg-slate-850 text-slate-300 hover:text-white border border-slate-800 rounded-xl transition-colors cursor-pointer shrink-0"
+          onClick={fetchUsersAndFiles}
+          className="text-xs font-semibold px-4 py-2 bg-slate-900 hover:bg-slate-850 text-slate-300 hover:text-white border border-slate-800 rounded-xl transition-colors cursor-pointer shrink-0 flex items-center space-x-1.5"
         >
-          Rafraîchir la liste
+          <RefreshCw className={`h-3.5 w-3.5 text-emerald-400 ${loading ? "animate-spin" : ""}`} />
+          <span>Rafraîchir</span>
         </button>
       </div>
 
@@ -226,6 +345,7 @@ export default function AdminUsersTab({ currentUser }: AdminUsersTabProps) {
               <tr className="border-b border-slate-850 text-[10px] font-bold text-slate-500 uppercase tracking-wider bg-slate-950/40">
                 <th className="py-4 px-5">Utilisateur</th>
                 <th className="py-4 px-5">Rôle</th>
+                <th className="py-4 px-5">Fichiers</th>
                 <th className="py-4 px-5">Créé le</th>
                 <th className="py-4 px-5 text-right">Actions</th>
               </tr>
@@ -235,6 +355,7 @@ export default function AdminUsersTab({ currentUser }: AdminUsersTabProps) {
                 const isSelf = u.id === currentUser?.id;
                 const isActing = actionUserId === u.id;
                 const fullName = u.username || 'utilisateur';
+                const userFiles = files.filter(f => f.ownerId === u.id || f.ownerUsername === u.username);
 
                 return (
                   <tr key={u.id} className="text-xs hover:bg-slate-900/30 transition-colors">
@@ -269,13 +390,25 @@ export default function AdminUsersTab({ currentUser }: AdminUsersTabProps) {
                           ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/15"
                           : "bg-slate-950 text-slate-400 border-slate-800"
                       }`}>
-                        {u.role === "admin" ? "Administrateur" : "Utilisateur"}
+                        {u.role === "admin" ? "Administrateur" : "Membre"}
                       </span>
                     </td>
 
+                    {/* User Files count button */}
+                    <td className="py-4 px-5">
+                      <button
+                        onClick={() => setViewFilesUser(u)}
+                        className="inline-flex items-center space-x-1.5 px-2.5 py-1.5 bg-slate-950 hover:bg-slate-800 text-emerald-400 border border-slate-800 rounded-xl text-xs font-bold transition-all cursor-pointer active:scale-95"
+                        title="Voir les fichiers de cet utilisateur"
+                      >
+                        <FolderKey className="h-3.5 w-3.5" />
+                        <span>{userFiles.length} fichier{userFiles.length > 1 ? 's' : ''}</span>
+                      </button>
+                    </td>
+
                     {/* Created date */}
-                    <td className="py-4 px-5 text-slate-400">
-                      <div className="flex items-center space-x-1">
+                    <td className="py-4 px-5 text-slate-400 font-mono text-[11px]">
+                      <div className="flex items-center space-x-1.5">
                         <Calendar className="h-3.5 w-3.5 text-slate-500" />
                         <span>{formatDate(u.createdAt)}</span>
                       </div>
@@ -283,7 +416,17 @@ export default function AdminUsersTab({ currentUser }: AdminUsersTabProps) {
 
                     {/* Action buttons */}
                     <td className="py-4 px-5 text-right">
-                      <div className="flex items-center justify-end space-x-2">
+                      <div className="flex items-center justify-end space-x-1.5">
+                        {/* Edit Profile Button */}
+                        <button
+                          onClick={() => handleOpenEditModal(u)}
+                          disabled={isActing}
+                          className="p-2 bg-slate-950 hover:bg-slate-850 text-slate-300 hover:text-white border border-slate-800 rounded-xl transition-all cursor-pointer min-h-[42px] min-w-[42px] flex items-center justify-center active:scale-95"
+                          title="Modifier les données du profil"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </button>
+
                         {/* Reset Password / Passcode Button */}
                         <button
                           onClick={() => handleOpenResetModal(u)}
@@ -305,7 +448,7 @@ export default function AdminUsersTab({ currentUser }: AdminUsersTabProps) {
                           }`}
                           title="Changer le rôle"
                         >
-                          {isActing && actionUserId === u.id ? (
+                          {isActing ? (
                             <Loader2 className="h-3.5 w-3.5 animate-spin mx-auto" />
                           ) : (
                             u.role === "admin" ? "Rétrograder" : "Promouvoir"
@@ -334,6 +477,235 @@ export default function AdminUsersTab({ currentUser }: AdminUsersTabProps) {
           </table>
         </div>
       </div>
+
+      {/* Edit Profile Modal */}
+      <AnimatePresence>
+        {editModalUser && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="relative bg-slate-900 border border-slate-800/90 rounded-3xl w-full max-w-md overflow-hidden shadow-2xl p-6"
+            >
+              <div className="flex items-center justify-between pb-4 border-b border-slate-800">
+                <div className="flex items-center space-x-2 text-emerald-400">
+                  <Pencil className="h-5 w-5" />
+                  <h3 className="font-bold text-slate-200">Modifier le Profil</h3>
+                </div>
+                <button
+                  onClick={() => setEditModalUser(null)}
+                  className="text-slate-400 hover:text-slate-200 hover:bg-slate-800 p-2 rounded-xl transition-colors cursor-pointer"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              <form onSubmit={handleSaveProfile} className="mt-5 space-y-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-300">Identifiant (Nom d'utilisateur)</label>
+                  <input
+                    type="text"
+                    value={editUsername}
+                    onChange={(e) => setEditUsername(e.target.value)}
+                    required
+                    className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-2xl px-4 py-3 text-sm font-semibold text-slate-100 focus:outline-none"
+                  />
+                  <p className="text-[10px] text-slate-500">Utilisé par l'utilisateur pour se connecter à QR Drive.</p>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-300">Rôle d'Accès</label>
+                  <select
+                    value={editRole}
+                    onChange={(e) => setEditRole(e.target.value as any)}
+                    disabled={editModalUser.id === currentUser?.id}
+                    className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-2xl px-4 py-3 text-sm font-semibold text-slate-100 focus:outline-none"
+                  >
+                    <option value="user">Membre (Accès fichiers standard)</option>
+                    <option value="admin">Administrateur (Gestion globale)</option>
+                  </select>
+                </div>
+
+                <div className="pt-2 flex items-center justify-between">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const target = editModalUser;
+                      setEditModalUser(null);
+                      handleOpenResetModal(target);
+                    }}
+                    className="text-xs font-semibold text-emerald-400 hover:underline flex items-center space-x-1 cursor-pointer"
+                  >
+                    <KeyRound className="h-3.5 w-3.5" />
+                    <span>Régénérer le mot de passe</span>
+                  </button>
+                </div>
+
+                <div className="pt-4 flex items-center justify-end space-x-3 border-t border-slate-800">
+                  <button
+                    type="button"
+                    onClick={() => setEditModalUser(null)}
+                    className="px-4 py-2.5 rounded-xl text-xs font-bold bg-slate-950 text-slate-400 hover:text-slate-200 border border-slate-800 cursor-pointer transition-colors"
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSavingProfile}
+                    className="px-5 py-2.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-950/20 cursor-pointer transition-all disabled:opacity-50 flex items-center space-x-2"
+                  >
+                    {isSavingProfile ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span>Enregistrement...</span>
+                      </>
+                    ) : (
+                      <span>Sauvegarder</span>
+                    )}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* User Files Inspection Modal */}
+      <AnimatePresence>
+        {viewFilesUser && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="relative bg-slate-900 border border-slate-800/90 rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col max-h-[85vh]"
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between p-5 border-b border-slate-800 bg-slate-950/50 shrink-0">
+                <div className="flex items-center space-x-2 text-emerald-400">
+                  <FolderKey className="h-5 w-5" />
+                  <h3 className="font-bold text-slate-200">
+                    Fichiers de <span className="text-emerald-400">{viewFilesUser.username}</span>
+                  </h3>
+                </div>
+                <button
+                  onClick={() => setViewFilesUser(null)}
+                  className="text-slate-400 hover:text-slate-200 hover:bg-slate-800 p-2 rounded-xl transition-colors cursor-pointer"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              {/* Body list */}
+              <div className="p-5 overflow-y-auto space-y-3 flex-grow">
+                {(() => {
+                  const userFiles = files.filter(
+                    f => f.ownerId === viewFilesUser.id || f.ownerUsername === viewFilesUser.username
+                  );
+
+                  if (userFiles.length === 0) {
+                    return (
+                      <div className="py-12 text-center text-slate-400 text-xs flex flex-col items-center">
+                        <FolderKey className="h-8 w-8 text-slate-600 mb-2" />
+                        <p className="font-semibold text-slate-300">Aucun fichier téléversé</p>
+                        <p className="text-slate-500 mt-1">Cet utilisateur n'a aucun fichier hébergé sur QR Drive.</p>
+                      </div>
+                    );
+                  }
+
+                  return userFiles.map((file) => {
+                    const isExpired = file.expiresAt && new Date() > new Date(file.expiresAt);
+                    const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
+
+                    return (
+                      <div
+                        key={file.id}
+                        className="bg-slate-950/70 border border-slate-800/80 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:border-slate-700/80 transition-all"
+                      >
+                        <div className="flex items-center space-x-3 min-w-0">
+                          <div className="p-2.5 bg-slate-900 border border-slate-800 rounded-xl text-emerald-400 shrink-0">
+                            <FileText className="h-5 w-5" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-slate-200 truncate">{file.name}</p>
+                            <div className="flex items-center gap-2 text-[10px] text-slate-400 mt-1 flex-wrap">
+                              <span>{sizeMB} Mo</span>
+                              <span>•</span>
+                              <span>{formatDate(file.uploadedAt)}</span>
+                              <span>•</span>
+                              <span className="text-emerald-400/90 font-semibold">{file.downloads} téléchargement{file.downloads > 1 ? 's' : ''}</span>
+                              {isExpired && (
+                                <span className="text-red-400 font-bold bg-red-950/30 px-1.5 py-0.5 rounded border border-red-900/30">
+                                  Expiré
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Actions */}
+                        <div className="flex items-center space-x-2 shrink-0 justify-end pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-850">
+                          {/* QR code dialog shortcut */}
+                          {onOpenQR && (
+                            <button
+                              onClick={() => {
+                                setViewFilesUser(null);
+                                onOpenQR(file);
+                              }}
+                              className="px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-1.5 active:scale-95"
+                              title="Afficher le QR code"
+                            >
+                              <QrCode className="h-3.5 w-3.5" />
+                              <span className="hidden xs:inline">QR Code</span>
+                            </button>
+                          )}
+
+                          {/* Copy Link */}
+                          <button
+                            onClick={() => handleCopyLink(file.id)}
+                            className="p-2.5 bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 rounded-xl text-xs font-semibold transition-all cursor-pointer active:scale-95"
+                            title="Copier le lien"
+                          >
+                            {copiedFileId === file.id ? <Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4" />}
+                          </button>
+
+                          {/* Delete file */}
+                          <button
+                            onClick={() => handleDeleteUserFile(file.id, file.name)}
+                            disabled={deletingFileId === file.id}
+                            className="p-2.5 bg-slate-900 hover:bg-red-950/40 text-slate-400 hover:text-red-400 border border-slate-800 hover:border-red-900/40 rounded-xl transition-all cursor-pointer active:scale-95"
+                            title="Supprimer le fichier"
+                          >
+                            {deletingFileId === file.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Trash2 className="h-4 w-4" />
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  });
+                })()}
+              </div>
+
+              {/* Footer */}
+              <div className="p-4 border-t border-slate-800 bg-slate-950/60 flex items-center justify-between shrink-0">
+                <span className="text-xs text-slate-400">
+                  Supervision administrateur — Accès direct aux fichiers.
+                </span>
+                <button
+                  onClick={() => setViewFilesUser(null)}
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                >
+                  Fermer
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Reset Password Modal */}
       <AnimatePresence>

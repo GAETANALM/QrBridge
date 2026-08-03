@@ -135,12 +135,19 @@ export default function App() {
   const handleDeleteFile = async (id: string) => {
     if (window.confirm("Êtes-vous sûr de vouloir supprimer définitivement ce fichier ?")) {
       try {
-        if (!token) return;
-        await apiDeleteFile(token, id);
+        const activeToken = token || localStorage.getItem("qr_drive_token") || "";
+        if (!activeToken) {
+          alert("Vous devez être connecté pour supprimer un fichier.");
+          return;
+        }
+        await apiDeleteFile(activeToken, id);
+        if (selectedFile?.id === id) {
+          setSelectedFile(null);
+        }
         // Filter out of local state
         setFiles((prev) => prev.filter((f) => f.id !== id));
       } catch (err: any) {
-        console.error(err);
+        console.error("Delete file failed:", err);
         alert(err.message || "Impossible de supprimer le fichier.");
       }
     }
@@ -378,7 +385,7 @@ export default function App() {
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.15 }}
             >
-              <AdminUsersTab currentUser={user} />
+              <AdminUsersTab currentUser={user} onOpenQR={setSelectedFile} />
             </motion.div>
           )}
         </AnimatePresence>

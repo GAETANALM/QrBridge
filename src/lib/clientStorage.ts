@@ -251,6 +251,48 @@ export async function clientUpdateUserRole(token: string, targetUserId: string, 
   };
 }
 
+export async function clientUpdateUserProfile(token: string, targetUserId: string, data: { username?: string; role?: "admin" | "user" }): Promise<User> {
+  const currentUser = await clientGetMe(token);
+  if (currentUser.role !== "admin") {
+    throw new Error("Accès non autorisé.");
+  }
+
+  const users = getStoredUsers();
+  const targetUser = users.find((u) => u.id === targetUserId);
+  if (!targetUser) {
+    throw new Error("Utilisateur introuvable.");
+  }
+
+  if (data.role && currentUser.id === targetUserId && data.role !== "admin") {
+    throw new Error("Vous ne pouvez pas révoquer vos propres droits d'administrateur.");
+  }
+
+  if (data.username) {
+    const trimmed = data.username.trim();
+    if (trimmed.length < 2) {
+      throw new Error("L'identifiant doit contenir au moins 2 caractères.");
+    }
+    const duplicate = users.find((u) => u.id !== targetUserId && u.username.toLowerCase() === trimmed.toLowerCase());
+    if (duplicate) {
+      throw new Error("Cet identifiant est déjà utilisé par un autre compte.");
+    }
+    targetUser.username = trimmed;
+  }
+
+  if (data.role) {
+    targetUser.role = data.role;
+  }
+
+  saveStoredUsers(users);
+
+  return {
+    id: targetUser.id,
+    username: targetUser.username,
+    role: targetUser.role,
+    createdAt: targetUser.createdAt,
+  };
+}
+
 export async function clientDeleteUser(token: string, targetUserId: string): Promise<void> {
   const currentUser = await clientGetMe(token);
   if (currentUser.role !== "admin") {
@@ -446,7 +488,12 @@ export async function clientDeleteFile(token: string, fileId: string): Promise<v
         return;
       }
 
-      if (currentUser.role !== "admin" && record.ownerId !== currentUser.id) {
+      const isOwner =
+        (record.ownerId && record.ownerId === currentUser.id) ||
+        (record.ownerUsername && record.ownerUsername.toLowerCase() === currentUser.username.toLowerCase()) ||
+        (!record.ownerId && !record.ownerUsername);
+
+      if (currentUser.role !== "admin" && !isOwner) {
         reject(new Error("Vous n'avez pas la permission de supprimer ce fichier."));
         return;
       }

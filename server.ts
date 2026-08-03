@@ -356,6 +356,85 @@ app.patch("/api/admin/users/:id/role", authenticateToken, requireAdmin, async (r
   }
 });
 
+// Update complete profile data (username, role) - Admin only
+app.put("/api/admin/users/:id", authenticateToken, requireAdmin, async (req: any, res) => {
+  try {
+    const { id } = req.params;
+    const { username, role } = req.body;
+
+    const users = await loadUsers();
+    const userIndex = users.findIndex(u => u.id === id);
+
+    if (userIndex === -1) {
+      return res.status(404).json({ error: "Utilisateur non trouvé." });
+    }
+
+    if (role && !["admin", "user"].includes(role)) {
+      return res.status(400).json({ error: "Rôle invalide." });
+    }
+
+    // Check self admin demotion
+    if (id === req.user.id && role && role !== "admin") {
+      return res.status(400).json({ error: "Vous ne pouvez pas révoquer vos propres droits d'administrateur." });
+    }
+
+    let newUsername = users[userIndex].username;
+    if (username && typeof username === "string") {
+      const trimmed = username.trim();
+      if (trimmed.length < 2) {
+        return res.status(400).json({ error: "L'identifiant doit contenir au moins 2 caractères." });
+      }
+      // Check duplicate username
+      const existing = users.find(u => u.id !== id && u.username.toLowerCase() === trimmed.toLowerCase());
+      if (existing) {
+        return res.status(400).json({ error: "Cet identifiant est déjà utilisé par un autre compte." });
+      }
+      newUsername = trimmed;
+    }
+
+    const updatedRole = role || users[userIndex].role;
+
+    users[userIndex].username = newUsername;
+    users[userIndex].role = updatedRole;
+
+    await saveUsers(users);
+
+    // Update active sessions if any
+    for (const [token, session] of SESSIONS.entries()) {
+      if (session.id === id) {
+        SESSIONS.set(token, { ...session, username: newUsername, role: updatedRole });
+      }
+    }
+
+    // Update metadata files for uploads owned by this user
+    try {
+      const files = await fs.promises.readdir(UPLOADS_DIR);
+      const metaFiles = files.filter((f) => f.endsWith(".meta.json") && f !== "users.json");
+      for (const metaFile of metaFiles) {
+        const filePath = path.join(UPLOADS_DIR, metaFile);
+        const content = await fs.promises.readFile(filePath, "utf-8");
+        const meta = JSON.parse(content);
+        if (meta.ownerId === id) {
+          meta.ownerUsername = newUsername;
+          await fs.promises.writeFile(filePath, JSON.stringify(meta, null, 2));
+        }
+      }
+    } catch (e) {
+      console.error("Error updating user file metadata:", e);
+    }
+
+    res.json({
+      id,
+      username: newUsername,
+      role: updatedRole,
+      createdAt: users[userIndex].createdAt
+    });
+  } catch (error) {
+    console.error("Update profile error:", error);
+    res.status(500).json({ error: "Erreur lors de la mise à jour du profil." });
+  }
+});
+
 // 7. Delete user (Admin only)
 app.delete("/api/admin/users/:id", authenticateToken, requireAdmin, async (req: any, res) => {
   try {
@@ -588,8 +667,13 @@ app.delete("/api/files/:id", authenticateToken, async (req: any, res) => {
     const metaContent = await fs.promises.readFile(metaPath, "utf-8");
     const metadata = JSON.parse(metaContent);
 
-    // Authorization check
-    if (req.user.role !== "admin" && metadata.ownerId !== req.user.id) {
+    // Authorization check: Admin can delete anything. Standard user can delete if they own it (by id or username) or if owner is unassigned.
+    const isOwner =
+      (metadata.ownerId && metadata.ownerId === req.user.id) ||
+      (metadata.ownerUsername && metadata.ownerUsername.toLowerCase() === req.user.username.toLowerCase()) ||
+      (!metadata.ownerId && !metadata.ownerUsername);
+
+    if (req.user.role !== "admin" && !isOwner) {
       return res.status(403).json({ error: "Vous n'êtes pas autorisé à supprimer ce fichier." });
     }
 
