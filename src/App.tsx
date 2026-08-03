@@ -183,33 +183,33 @@ export default function App() {
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-1 bg-gradient-to-r from-transparent via-emerald-500 to-transparent opacity-60" />
 
       {/* Main Container */}
-      <div className="max-w-4xl w-full mx-auto px-4 py-8 md:py-12 flex-grow">
+      <div className="max-w-4xl w-full mx-auto px-3.5 sm:px-4 py-4 sm:py-8 flex-grow">
         
         {/* Navigation / Hero section */}
-        <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10 border-b border-slate-900 pb-6">
+        <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 sm:mb-10 border-b border-slate-900 pb-5">
           <div className="flex items-center space-x-3">
-            <div className="p-2.5 bg-emerald-500 text-slate-950 rounded-2xl shadow-lg shadow-emerald-500/20 ring-4 ring-emerald-500/10">
+            <div className="p-2.5 bg-emerald-500 text-slate-950 rounded-2xl shadow-lg shadow-emerald-500/20 ring-4 ring-emerald-500/10 shrink-0">
               <HardDrive className="h-6 w-6" id="logo-icon" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold tracking-tight text-slate-100 flex items-center gap-2">
-                QR Drive <span className="text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 py-0.5 px-2 rounded-full">Bêta</span>
+              <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-100 flex items-center gap-2">
+                QR Drive <span className="text-[10px] sm:text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 py-0.5 px-2 rounded-full">Bêta</span>
               </h1>
-              <p className="text-xs text-slate-400 mt-0.5 font-medium">Partagez vos fichiers instantanément via QR codes</p>
+              <p className="text-[11px] sm:text-xs text-slate-400 mt-0.5 font-medium">Partagez vos fichiers instantanément via QR codes</p>
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+          <div className="flex items-center justify-between sm:justify-end gap-2.5">
             {/* User credentials & role indicator */}
-            <div className="bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 flex items-center space-x-3 text-xs">
-              <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-              <div className="text-left">
-                <p className="font-semibold text-slate-300 truncate max-w-[150px]">{user.username}</p>
+            <div className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 flex items-center space-x-2.5 text-xs flex-1 sm:flex-initial">
+              <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+              <div className="text-left overflow-hidden">
+                <p className="font-bold text-slate-200 truncate max-w-[120px] sm:max-w-[150px]">{user.username}</p>
                 <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider flex items-center gap-1">
                   {user.role === "admin" ? (
                     <>
-                      <Shield className="h-3 w-3 text-emerald-400" />
-                      <span className="text-emerald-400">Administrateur</span>
+                      <Shield className="h-3 w-3 text-emerald-400 shrink-0" />
+                      <span className="text-emerald-400">Admin</span>
                     </>
                   ) : (
                     <span>Membre</span>
@@ -222,21 +222,21 @@ export default function App() {
             <button
               id="logout-btn"
               onClick={handleLogout}
-              className="flex items-center justify-center space-x-1.5 bg-slate-900 hover:bg-red-950/20 border border-slate-800 hover:border-red-900/30 text-slate-300 hover:text-red-400 py-2.5 px-4 rounded-xl text-xs font-bold transition-all cursor-pointer"
+              className="flex items-center justify-center space-x-1.5 bg-slate-900 hover:bg-red-950/20 border border-slate-800 hover:border-red-900/30 text-slate-300 hover:text-red-400 py-2 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer min-h-[42px] shrink-0 active:scale-95"
               title="Se déconnecter"
             >
-              <LogOut className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Déconnexion</span>
+              <LogOut className="h-4 w-4" />
+              <span className="text-xs font-semibold">Déconnexion</span>
             </button>
           </div>
         </header>
 
         {/* Admin Tab Switching */}
         {user.role === "admin" && (
-          <div className="flex bg-slate-900/40 border border-slate-850 p-1.5 rounded-2xl mb-8 max-w-sm">
+          <div className="flex bg-slate-900/40 border border-slate-850 p-1.5 rounded-2xl mb-6 sm:mb-8 max-w-sm w-full">
             <button
               onClick={() => setActiveTab('files')}
-              className={`flex-1 flex items-center justify-center space-x-2 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              className={`flex-1 flex items-center justify-center space-x-2 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer min-h-[44px] active:scale-95 ${
                 activeTab === 'files'
                   ? "bg-slate-850 text-emerald-400 shadow-sm border border-slate-800"
                   : "text-slate-400 hover:text-slate-300"
@@ -247,7 +247,7 @@ export default function App() {
             </button>
             <button
               onClick={() => setActiveTab('users')}
-              className={`flex-1 flex items-center justify-center space-x-2 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              className={`flex-1 flex items-center justify-center space-x-2 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer min-h-[44px] active:scale-95 ${
                 activeTab === 'users'
                   ? "bg-slate-850 text-emerald-400 shadow-sm border border-slate-800"
                   : "text-slate-400 hover:text-slate-300"

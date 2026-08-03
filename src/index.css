@@ -22,13 +22,27 @@ body {
   min-height: -webkit-fill-available;
 }
 
+/* Prevent auto-zoom on iOS Safari when tapping inputs */
+@media (max-width: 640px) {
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+}
+
 /* Smooth scrolling on mobile devices */
 .overflow-y-auto {
   -webkit-overflow-scrolling: touch;
 }
 
-/* Ensure touch targets are easily clickable */
+/* Touch feedback for buttons */
 button, input, select, a {
   touch-action: manipulation;
+}
+
+.active-touch {
+  transition: transform 0.1s ease;
+}
+.active-touch:active {
+  transform: scale(0.97);
 }
 

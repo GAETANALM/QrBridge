@@ -229,15 +229,15 @@ export default function AdminUsersTab({ currentUser }: AdminUsersTabProps) {
                         <button
                           onClick={() => handleToggleRole(u.id, u.role)}
                           disabled={isSelf || isActing}
-                          className={`px-2.5 py-1.5 rounded-xl text-[10px] font-bold border transition-colors cursor-pointer ${
+                          className={`px-3 py-2 rounded-xl text-xs font-bold border transition-colors cursor-pointer min-h-[42px] flex items-center justify-center ${
                             isSelf 
                               ? "opacity-40 cursor-not-allowed text-slate-600 border-slate-900" 
-                              : "bg-slate-950 hover:bg-slate-850 text-slate-300 border-slate-800 hover:text-white"
+                              : "bg-slate-950 hover:bg-slate-850 text-slate-300 border-slate-800 hover:text-white active:scale-95"
                           }`}
                           title="Changer le rôle"
                         >
                           {isActing && actionUserId === u.id ? (
-                            <Loader2 className="h-3 w-3 animate-spin mx-auto" />
+                            <Loader2 className="h-3.5 w-3.5 animate-spin mx-auto" />
                           ) : (
                             u.role === "admin" ? "Rétrograder" : "Promouvoir"
                           )}
@@ -247,10 +247,10 @@ export default function AdminUsersTab({ currentUser }: AdminUsersTabProps) {
                         <button
                           onClick={() => handleDeleteUser(u.id, fullName)}
                           disabled={isSelf || isActing}
-                          className={`p-1.5 rounded-xl border transition-colors cursor-pointer ${
+                          className={`p-2 rounded-xl border transition-colors cursor-pointer min-h-[42px] min-w-[42px] flex items-center justify-center ${
                             isSelf 
                               ? "opacity-40 cursor-not-allowed text-slate-600 border-slate-900" 
-                              : "bg-slate-950 hover:bg-red-950/30 text-slate-500 border-slate-800 hover:border-red-900/40 hover:text-red-400"
+                              : "bg-slate-950 hover:bg-red-950/30 text-slate-500 border-slate-800 hover:border-red-900/40 hover:text-red-400 active:scale-95"
                           }`}
                           title="Supprimer l'utilisateur"
                         >

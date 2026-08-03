@@ -144,43 +144,42 @@ export default function QRCodeDialog({ file, onClose }: QRCodeDialogProps) {
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               transition={{ type: "spring", duration: 0.4 }}
-              className="relative bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl z-10"
+              className="relative bg-slate-900 border border-slate-800/90 rounded-3xl w-full max-w-md overflow-hidden shadow-2xl z-10 max-h-[90vh] flex flex-col my-auto"
           >
             {/* Header */}
-            <div className="flex items-center justify-between p-5 border-b border-slate-800 bg-slate-950/50">
+            <div className="flex items-center justify-between p-4 sm:p-5 border-b border-slate-800 bg-slate-950/60 shrink-0">
               <div className="flex items-center space-x-2 text-emerald-400">
                 <QrCode className="h-5 w-5" />
-                <h3 className="font-semibold text-slate-200">Options du QR Code</h3>
+                <h3 className="font-bold text-slate-200 text-sm sm:text-base">Options du QR Code</h3>
               </div>
               <button
                   id="dialog-close-btn"
                   onClick={onClose}
-                  className="text-slate-400 hover:text-slate-200 hover:bg-slate-800 p-1.5 rounded-lg transition-colors cursor-pointer"
+                  className="text-slate-400 hover:text-slate-100 hover:bg-slate-800 p-2 rounded-xl transition-colors cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
             {/* Body */}
-            <div className="p-6 flex flex-col items-center">
+            <div className="p-4 sm:p-6 flex flex-col items-center overflow-y-auto">
               {/* File info banner */}
-              <div className="w-full text-center mb-5">
-                <p className="text-sm font-semibold text-slate-300 line-clamp-1 break-all px-2">
+              <div className="w-full text-center mb-4">
+                <p className="text-sm font-bold text-slate-200 line-clamp-1 break-all px-2">
                   {file.name}
                 </p>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  {(file.size / (1024 * 1024)).toFixed(2)} Mo • Prêt à être partagé
+                <p className="text-xs text-slate-400 mt-0.5 font-medium">
+                  {(file.size / (1024 * 1024)).toFixed(2)} Mo • Scan ou téléchargement
                 </p>
               </div>
 
               {/* QR Code Container */}
-              <div className="bg-white p-3 rounded-2xl shadow-inner border border-slate-700/50 mb-6 relative group overflow-hidden">
-                <canvas ref={canvasRef} id="qr-code-canvas" className="rounded-lg" />
-                <div className="absolute inset-0 bg-black/5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none rounded-xl" />
+              <div className="bg-white p-3 rounded-2xl shadow-inner border border-slate-700/50 mb-5 relative group overflow-hidden shrink-0">
+                <canvas ref={canvasRef} id="qr-code-canvas" className="rounded-lg max-w-[220px] sm:max-w-[260px] h-auto" />
               </div>
 
               {/* Link Copy Field */}
-              <div className="w-full bg-slate-950/80 border border-slate-800 rounded-xl p-3 flex items-center justify-between mb-5">
+              <div className="w-full bg-slate-950/80 border border-slate-800/90 rounded-2xl p-3 flex items-center justify-between mb-4">
                 <div className="overflow-hidden mr-2">
                   <p className="text-[10px] text-slate-500 uppercase tracking-wider font-bold">Lien de téléchargement</p>
                   <p className="text-xs text-slate-300 font-mono truncate select-all">{shareUrl}</p>
@@ -188,24 +187,24 @@ export default function QRCodeDialog({ file, onClose }: QRCodeDialogProps) {
                 <button
                     id="copy-link-btn"
                     onClick={handleCopyLink}
-                    className={`p-2 rounded-lg transition-all shrink-0 cursor-pointer ${
+                    className={`p-2.5 rounded-xl transition-all shrink-0 cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center active:scale-95 ${
                         copiedLink
                             ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
                             : "bg-slate-850 hover:bg-slate-800 text-slate-300 border border-slate-800"
                     }`}
                     title="Copier le lien"
                 >
-                  {copiedLink ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                  {copiedLink ? <Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4" />}
                 </button>
               </div>
 
               {/* Action grid (Copy Image, Save QR, Share, Open) */}
-              <div className="grid grid-cols-2 gap-3.5 w-full">
+              <div className="grid grid-cols-2 gap-2.5 sm:gap-3.5 w-full">
                 {/* 1. Copy QR image directly */}
                 <button
                     id="copy-qr-img-btn"
                     onClick={handleCopyQRImage}
-                    className={`flex items-center justify-center space-x-2 py-3 px-4 rounded-xl font-bold text-xs border transition-all cursor-pointer active:scale-[0.98] ${
+                    className={`flex items-center justify-center space-x-2 py-3 px-3 rounded-xl font-bold text-xs border transition-all cursor-pointer min-h-[48px] active:scale-95 ${
                         copiedQR
                             ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
                             : "bg-slate-950 hover:bg-slate-850 text-slate-200 border-slate-800"
@@ -215,7 +214,7 @@ export default function QRCodeDialog({ file, onClose }: QRCodeDialogProps) {
                   {copiedQR ? (
                       <>
                         <Check className="h-4 w-4 text-emerald-400" />
-                        <span>QR Copié !</span>
+                        <span>Copie OK !</span>
                       </>
                   ) : (
                       <>
@@ -229,22 +228,22 @@ export default function QRCodeDialog({ file, onClose }: QRCodeDialogProps) {
                 <button
                     id="download-qr-btn"
                     onClick={handleDownloadQR}
-                    className="flex items-center justify-center space-x-2 bg-slate-950 hover:bg-slate-850 text-slate-200 py-3 px-4 rounded-xl font-bold text-xs border border-slate-800 transition-all cursor-pointer active:scale-[0.98]"
+                    className="flex items-center justify-center space-x-2 bg-slate-950 hover:bg-slate-850 text-slate-200 py-3 px-3 rounded-xl font-bold text-xs border border-slate-800 transition-all cursor-pointer min-h-[48px] active:scale-95"
                     title="Télécharger l'image PNG du QR code"
                 >
                   <Download className="h-4 w-4 text-emerald-400" />
-                  <span>Enregistrer l'image</span>
+                  <span>Enregistrer</span>
                 </button>
 
                 {/* 3. Share link */}
                 <button
                     id="share-qr-btn"
                     onClick={handleShare}
-                    className="flex items-center justify-center space-x-2 bg-slate-950 hover:bg-slate-850 text-slate-200 py-3 px-4 rounded-xl font-bold text-xs border border-slate-800 transition-all cursor-pointer active:scale-[0.98]"
+                    className="flex items-center justify-center space-x-2 bg-slate-950 hover:bg-slate-850 text-slate-200 py-3 px-3 rounded-xl font-bold text-xs border border-slate-800 transition-all cursor-pointer min-h-[48px] active:scale-95"
                     title="Partager le QR Code"
                 >
                   <Share2 className="h-4 w-4 text-emerald-400" />
-                  <span>{isShareSupported ? "Partager" : "Partager (Copier)"}</span>
+                  <span>{isShareSupported ? "Partager" : "Partager"}</span>
                 </button>
 
                 {/* 4. Open page in new tab */}
@@ -253,7 +252,7 @@ export default function QRCodeDialog({ file, onClose }: QRCodeDialogProps) {
                     href={shareUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center justify-center space-x-2 bg-emerald-600 hover:bg-emerald-500 text-white py-3 px-4 rounded-xl font-bold text-xs shadow-lg shadow-emerald-950/20 transition-all cursor-pointer active:scale-[0.98]"
+                    className="flex items-center justify-center space-x-2 bg-emerald-600 hover:bg-emerald-500 text-white py-3 px-3 rounded-xl font-bold text-xs shadow-lg shadow-emerald-950/20 transition-all cursor-pointer min-h-[48px] active:scale-95"
                     title="Ouvrir le lien de téléchargement directement"
                 >
                   <ExternalLink className="h-4 w-4" />

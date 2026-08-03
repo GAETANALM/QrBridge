@@ -310,9 +310,9 @@ export default function SharePage({ fileId, onGoToHome }: SharePageProps) {
               onClick={handleDownload}
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
-              className="w-full mt-8 flex items-center justify-center space-x-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-4 px-6 rounded-2xl shadow-xl shadow-emerald-950/40 transition-all cursor-pointer text-base"
+              className="w-full mt-7 sm:mt-8 flex items-center justify-center space-x-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-4 px-6 rounded-2xl shadow-xl shadow-emerald-950/40 transition-all cursor-pointer text-base min-h-[52px] active:scale-95"
             >
-              <Download className="h-5 w-5 animate-bounce" />
+              <Download className="h-5 w-5 animate-bounce shrink-0" />
               <span>Télécharger le Fichier</span>
             </motion.button>
           </div>
