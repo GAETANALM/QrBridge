@@ -62,11 +62,17 @@ export default function AuthPage({ onAuthSuccess }: AuthPageProps) {
       if (contentType && contentType.includes("application/json")) {
         data = await response.json();
       } else {
+        if (response.status === 404) {
+          throw new Error("Erreur 404 : Le serveur backend (server.ts) est introuvable. Sur Netlify, votre serveur Express doit être hébergé (ex: Render, Railway) et son URL configurée dans la variable d'environnement VITE_API_URL.");
+        }
         const textStr = await response.text();
         throw new Error(textStr || `Erreur de communication avec le serveur (${response.status})`);
       }
 
       if (!response.ok) {
+        if (response.status === 404) {
+          throw new Error("Erreur 404 : Serveur API introuvable. Configurez VITE_API_URL sur Netlify avec l'URL de votre serveur backend.");
+        }
         throw new Error(data.error || "Une erreur s'est produite lors de l'authentification.");
       }
 
