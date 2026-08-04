@@ -8,13 +8,24 @@ interface FileUploaderProps {
   onUploadSuccess: (file: FileMetadata) => void;
 }
 
+const getNowPlusHours = (hoursToAdd: number = 1): string => {
+  const d = new Date(Date.now() + hoursToAdd * 60 * 60 * 1000);
+  const pad = (n: number) => n.toString().padStart(2, "0");
+  const year = d.getFullYear();
+  const month = pad(d.getMonth() + 1);
+  const day = pad(d.getDate());
+  const hours = pad(d.getHours());
+  const minutes = pad(d.getMinutes());
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+};
+
 export default function FileUploader({ onUploadSuccess }: FileUploaderProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [expirationType, setExpirationType] = useState<'never' | '10m' | '1h' | '1d' | '7d' | 'custom'>('never');
-  const [customExpiryDate, setCustomExpiryDate] = useState<string>("");
+  const [customExpiryDate, setCustomExpiryDate] = useState<string>(getNowPlusHours(1));
   const [customMessage, setCustomMessage] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -258,7 +269,12 @@ export default function FileUploader({ onUploadSuccess }: FileUploaderProps) {
                 <button
                   key={opt.value}
                   type="button"
-                  onClick={() => setExpirationType(opt.value as any)}
+                  onClick={() => {
+                    setExpirationType(opt.value as any);
+                    if (opt.value === "custom" && !customExpiryDate) {
+                      setCustomExpiryDate(getNowPlusHours(1));
+                    }
+                  }}
                   className={`py-2.5 px-1 text-center rounded-xl text-xs font-bold transition-all border cursor-pointer min-h-[44px] flex items-center justify-center active:scale-95 ${
                     expirationType === opt.value
                       ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40 shadow-sm"
@@ -276,19 +292,107 @@ export default function FileUploader({ onUploadSuccess }: FileUploaderProps) {
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: "auto" }}
                   exit={{ opacity: 0, height: 0 }}
-                  className="mt-3.5 pt-3.5 border-t border-slate-800/60 flex flex-col sm:flex-row sm:items-center gap-2.5 overflow-hidden"
+                  className="mt-3.5 pt-3.5 border-t border-slate-800/60 space-y-3 overflow-hidden"
                 >
-                  <div className="flex items-center space-x-2 text-xs text-slate-400 shrink-0">
-                    <Calendar className="h-4 w-4 text-emerald-400" />
-                    <span>Date et heure d'expiration :</span>
+                  <div className="flex items-center justify-between text-xs text-slate-300 font-semibold">
+                    <div className="flex items-center space-x-2">
+                      <Calendar className="h-4 w-4 text-emerald-400 shrink-0" />
+                      <span>Sélection de la date et de l'horaire :</span>
+                    </div>
+                    {customExpiryDate && (
+                      <span className="text-[11px] text-emerald-400 font-medium hidden sm:inline">
+                        {(() => {
+                          try {
+                            const d = new Date(customExpiryDate);
+                            if (isNaN(d.getTime())) return "";
+                            return d.toLocaleDateString("fr-FR", {
+                              weekday: "short",
+                              day: "numeric",
+                              month: "short",
+                              year: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit"
+                            });
+                          } catch {
+                            return "";
+                          }
+                        })()}
+                      </span>
+                    )}
                   </div>
-                  <input
-                    type="datetime-local"
-                    value={customExpiryDate}
-                    onChange={(e) => setCustomExpiryDate(e.target.value)}
-                    min={new Date().toISOString().substring(0, 16)}
-                    className="bg-slate-950 border border-slate-800 focus:border-emerald-500/50 rounded-xl px-3 py-2.5 text-base sm:text-xs text-slate-200 focus:outline-none w-full sm:max-w-xs min-h-[44px]"
-                  />
+
+                  {/* Dual Selectors: Date and Horaire */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <div>
+                      <label className="block text-[11px] font-medium text-slate-400 mb-1">
+                        Date d'expiration
+                      </label>
+                      <input
+                        type="date"
+                        value={customExpiryDate ? customExpiryDate.split("T")[0] : getNowPlusHours(1).split("T")[0]}
+                        min={new Date().toISOString().split("T")[0]}
+                        onChange={(e) => {
+                          const dateVal = e.target.value;
+                          const timeVal = customExpiryDate ? (customExpiryDate.split("T")[1] || "12:00") : "12:00";
+                          if (dateVal) {
+                            setCustomExpiryDate(`${dateVal}T${timeVal}`);
+                          }
+                        }}
+                        className="bg-slate-950 border border-slate-800 focus:border-emerald-500/50 rounded-xl px-3 py-2.5 text-xs text-slate-200 focus:outline-none w-full min-h-[44px]"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-medium text-slate-400 mb-1">
+                        Horaire d'expiration (Heure & Minutes)
+                      </label>
+                      <input
+                        type="time"
+                        value={customExpiryDate ? customExpiryDate.split("T")[1] : getNowPlusHours(1).split("T")[1]}
+                        onChange={(e) => {
+                          const timeVal = e.target.value;
+                          const dateVal = customExpiryDate ? (customExpiryDate.split("T")[0] || getNowPlusHours(1).split("T")[0]) : getNowPlusHours(1).split("T")[0];
+                          if (timeVal) {
+                            setCustomExpiryDate(`${dateVal}T${timeVal}`);
+                          }
+                        }}
+                        className="bg-slate-950 border border-slate-800 focus:border-emerald-500/50 rounded-xl px-3 py-2.5 text-xs text-slate-200 focus:outline-none w-full min-h-[44px]"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Shortcut presets */}
+                  <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                    <span className="text-[10px] text-slate-500 font-medium mr-1">Raccourcis :</span>
+                    <button
+                      type="button"
+                      onClick={() => setCustomExpiryDate(getNowPlusHours(1))}
+                      className="px-2.5 py-1 text-[11px] font-semibold bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 rounded-lg transition-colors border border-emerald-500/30 min-h-[32px]"
+                    >
+                      +1 heure (défaut)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCustomExpiryDate(getNowPlusHours(3))}
+                      className="px-2.5 py-1 text-[11px] font-medium bg-slate-800/80 hover:bg-slate-700 text-slate-300 rounded-lg transition-colors border border-slate-700/50 min-h-[32px]"
+                    >
+                      +3 heures
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCustomExpiryDate(getNowPlusHours(24))}
+                      className="px-2.5 py-1 text-[11px] font-medium bg-slate-800/80 hover:bg-slate-700 text-slate-300 rounded-lg transition-colors border border-slate-700/50 min-h-[32px]"
+                    >
+                      Demain même heure
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCustomExpiryDate(getNowPlusHours(168))}
+                      className="px-2.5 py-1 text-[11px] font-medium bg-slate-800/80 hover:bg-slate-700 text-slate-300 rounded-lg transition-colors border border-slate-700/50 min-h-[32px]"
+                    >
+                      +7 jours
+                    </button>
+                  </div>
                 </motion.div>
               )}
             </AnimatePresence>

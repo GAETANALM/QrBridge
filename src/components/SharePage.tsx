@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Download, FileText, ImageIcon, Music, Video, File, AlertCircle, Loader2, ArrowLeft, Heart, MessageSquare, Quote } from "lucide-react";
 import { motion } from "motion/react";
 import { FileMetadata } from "../types";
-import { apiGetFileMetadata, apiDownloadFile } from "../lib/api";
+import { apiGetFileMetadata, apiDownloadFile, getApiUrl } from "../lib/api";
 
 interface SharePageProps {
   fileId: string;
@@ -16,9 +16,15 @@ export default function SharePage({ fileId, onGoToHome }: SharePageProps) {
   const [contentUrl, setContentUrl] = useState<string | null>(null);
 
   useEffect(() => {
+    let isMounted = true;
+
     async function loadFileData() {
+      setLoading(true);
+      setError(null);
       try {
         const metaRes = await apiGetFileMetadata(fileId);
+        if (!isMounted) return;
+
         if (metaRes.status === 410) {
           if (metaRes.file) setFile(metaRes.file);
           setError("expired");
@@ -28,22 +34,41 @@ export default function SharePage({ fileId, onGoToHome }: SharePageProps) {
         if (metaRes.status === 404 || !metaRes.file) {
           throw new Error("Ce fichier n'existe plus ou est introuvable.");
         }
+
         setFile(metaRes.file);
 
-        // Fetch download blob/data URL
-        const downloadRes = await apiDownloadFile(fileId);
-        if (downloadRes.status === 200 && downloadRes.blobUrl) {
-          setContentUrl(downloadRes.blobUrl);
+        // Pre-fetch blob for media previews (image, audio, video) safely
+        // Do NOT fail the page if pre-fetching blob fails or if it's a binary archive
+        if (
+          metaRes.file.type.startsWith("image/") ||
+          metaRes.file.type.startsWith("audio/") ||
+          metaRes.file.type.startsWith("video/")
+        ) {
+          try {
+            const downloadRes = await apiDownloadFile(fileId);
+            if (isMounted && downloadRes.status === 200 && downloadRes.blobUrl) {
+              setContentUrl(downloadRes.blobUrl);
+            }
+          } catch (blobErr) {
+            console.warn("Media blob pre-fetch failed:", blobErr);
+          }
         }
       } catch (err: any) {
         console.error(err);
-        setError(err.message || "Une erreur est survenue.");
+        if (isMounted) {
+          setError(err.message || "Une erreur est survenue.");
+        }
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     }
 
     loadFileData();
+    return () => {
+      isMounted = false;
+    };
   }, [fileId]);
 
   const getFormatSize = (bytes: number): string => {
@@ -80,10 +105,14 @@ export default function SharePage({ fileId, onGoToHome }: SharePageProps) {
     if (file && error !== "expired") {
       let targetUrl = contentUrl;
       if (!targetUrl) {
-        const res = await apiDownloadFile(file.id);
-        if (res.blobUrl) {
-          targetUrl = res.blobUrl;
-          setContentUrl(res.blobUrl);
+        try {
+          const res = await apiDownloadFile(file.id);
+          if (res.blobUrl) {
+            targetUrl = res.blobUrl;
+            setContentUrl(res.blobUrl);
+          }
+        } catch (e) {
+          console.warn("Blob fetch failed, using direct endpoint download:", e);
         }
       }
 
@@ -95,10 +124,11 @@ export default function SharePage({ fileId, onGoToHome }: SharePageProps) {
         a.click();
         document.body.removeChild(a);
       } else {
-        window.location.href = `/api/download/${file.id}`;
+        const downloadEndpoint = getApiUrl(`/api/download/${file.id}`);
+        window.location.href = downloadEndpoint;
       }
 
-      // Increment download count locally for visual feel
+      // Increment download count locally for visual feedback
       setFile((prev) => (prev ? { ...prev, downloads: prev.downloads + 1 } : null));
     }
   };

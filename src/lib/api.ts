@@ -12,7 +12,6 @@ import {
   clientUploadFile,
   clientGetFiles,
   clientGetAllLocalFilesForSync,
-  clientDeleteFileDirect,
   clientGetFileMetadata,
   clientGetFileContent,
   clientDeleteFile,
@@ -23,9 +22,7 @@ import {
 } from "./clientStorage";
 
 export function getApiUrl(path: string): string {
-  const baseUrl = (((import.meta as any).env?.VITE_API_URL || "") as string).replace(/\/$/, "");
-  const cleanPath = path.startsWith("/") ? path : `/${path}`;
-  return `${baseUrl}${cleanPath}`;
+  return path.startsWith("/") ? path : `/${path}`;
 }
 
 // --- AUTH API ---
@@ -216,7 +213,7 @@ export async function syncLocalFilesToServer(token: string): Promise<number> {
             message: fileRecord.message,
           });
           // Remove from local IndexedDB once successfully uploaded to central server
-          await clientDeleteFileDirect(fileRecord.id);
+          await clientDeleteFile(token, fileRecord.id, true);
           syncedCount++;
         }
       } catch (e) {
