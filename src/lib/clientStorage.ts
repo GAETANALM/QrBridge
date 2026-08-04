@@ -408,6 +408,7 @@ export async function clientGetFiles(token: string): Promise<FileMetadata[]> {
 
       const validFiles = records
         .filter((record) => {
+          if (record.inTrash) return false;
           // Check expiration
           if (record.expiresAt && new Date(record.expiresAt) < now) {
             return false;
@@ -464,7 +465,7 @@ export async function clientGetFileMetadata(fileId: string): Promise<{ file?: Fi
 
     req.onsuccess = () => {
       const record: LocalFileRecord = req.result;
-      if (!record) {
+      if (!record || record.inTrash) {
         resolve({ status: 404, error: "Fichier introuvable." });
         return;
       }
@@ -493,7 +494,7 @@ export async function clientGetFileContent(fileId: string): Promise<{ record?: L
 
     req.onsuccess = () => {
       const record: LocalFileRecord = req.result;
-      if (!record) {
+      if (!record || record.inTrash) {
         resolve({ status: 404, error: "Fichier introuvable." });
         return;
       }

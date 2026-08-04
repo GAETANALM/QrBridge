@@ -239,33 +239,22 @@ export async function apiDeleteFile(token: string, fileId: string, permanent: bo
     });
 
     if (res.ok) {
-      // Also clean up local IndexedDB if present
-      await clientDeleteFileDirect(fileId).catch(() => {});
+      // Also update local IndexedDB record (soft-delete or permanent delete)
+      await clientDeleteFile(token, fileId, permanent).catch(() => {});
       return;
     }
 
     if (res.status === 404) {
-      return await clientDeleteFile(token, fileId, permanent);
+      // File already deleted or missing on server, sync local client storage
+      await clientDeleteFile(token, fileId, permanent).catch(() => {});
+      return;
     }
 
-    // Try client deletion fallback
-    try {
-      await clientDeleteFile(token, fileId, permanent);
-      return;
-    } catch {
-      const data = await res.json().catch(() => ({}));
-      throw new Error(data.error || "Impossible de supprimer le fichier.");
-    }
+    // Fallback for other server statuses or static hosting (e.g. Netlify)
+    await clientDeleteFile(token, fileId, permanent).catch(() => {});
   } catch (err: any) {
-    try {
-      await clientDeleteFile(token, fileId, permanent);
-      return;
-    } catch {
-      if (err instanceof Error && err.message && !err.message.includes("Failed to fetch") && !err.message.includes("NetworkError")) {
-        throw err;
-      }
-      return await clientDeleteFile(token, fileId, permanent);
-    }
+    // Network or server unreachable fallback
+    await clientDeleteFile(token, fileId, permanent).catch(() => {});
   }
 }
 
