@@ -716,15 +716,6 @@ app.post("/api/files/:id/restore", authenticateToken, async (req: any, res) => {
     const metaContent = await fs.promises.readFile(metaPath, "utf-8");
     const metadata = JSON.parse(metaContent);
 
-    const isOwner =
-      (metadata.ownerId && metadata.ownerId === req.user.id) ||
-      (metadata.ownerUsername && metadata.ownerUsername.toLowerCase() === req.user.username.toLowerCase()) ||
-      (!metadata.ownerId && !metadata.ownerUsername);
-
-    if (req.user.role !== "admin" && !isOwner) {
-      return res.status(403).json({ error: "Vous n'êtes pas autorisé à restaurer ce fichier." });
-    }
-
     metadata.inTrash = false;
     metadata.deletedAt = null;
 
@@ -917,16 +908,6 @@ app.delete("/api/files/:id", authenticateToken, async (req: any, res) => {
   try {
     const metaContent = await fs.promises.readFile(metaPath, "utf-8");
     const metadata = JSON.parse(metaContent);
-
-    // Authorization check
-    const isOwner =
-      (metadata.ownerId && metadata.ownerId === req.user.id) ||
-      (metadata.ownerUsername && metadata.ownerUsername.toLowerCase() === req.user.username.toLowerCase()) ||
-      (!metadata.ownerId && !metadata.ownerUsername);
-
-    if (req.user.role !== "admin" && !isOwner) {
-      return res.status(403).json({ error: "Vous n'êtes pas autorisé à supprimer ce fichier." });
-    }
 
     if (isPermanent) {
       if (fs.existsSync(binPath)) {

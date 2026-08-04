@@ -238,19 +238,34 @@ export async function apiDeleteFile(token: string, fileId: string, permanent: bo
       headers: { Authorization: `Bearer ${token}` },
     });
 
-    if (res.ok) return;
+    if (res.ok) {
+      // Also clean up local IndexedDB if present
+      await clientDeleteFileDirect(fileId).catch(() => {});
+      return;
+    }
 
     if (res.status === 404) {
       return await clientDeleteFile(token, fileId, permanent);
     }
 
-    const data = await res.json().catch(() => ({}));
-    throw new Error(data.error || "Impossible de supprimer le fichier.");
-  } catch (err: any) {
-    if (err instanceof Error && err.message && !err.message.includes("Failed to fetch") && !err.message.includes("NetworkError")) {
-      throw err;
+    // Try client deletion fallback
+    try {
+      await clientDeleteFile(token, fileId, permanent);
+      return;
+    } catch {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || "Impossible de supprimer le fichier.");
     }
-    return await clientDeleteFile(token, fileId, permanent);
+  } catch (err: any) {
+    try {
+      await clientDeleteFile(token, fileId, permanent);
+      return;
+    } catch {
+      if (err instanceof Error && err.message && !err.message.includes("Failed to fetch") && !err.message.includes("NetworkError")) {
+        throw err;
+      }
+      return await clientDeleteFile(token, fileId, permanent);
+    }
   }
 }
 
