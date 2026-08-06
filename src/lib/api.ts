@@ -12,6 +12,7 @@ import {
   clientUploadFile,
   clientGetFiles,
   clientGetAllLocalFilesForSync,
+  clientDeleteFileDirect,
   clientGetFileMetadata,
   clientGetFileContent,
   clientDeleteFile,
@@ -213,7 +214,7 @@ export async function syncLocalFilesToServer(token: string): Promise<number> {
             message: fileRecord.message,
           });
           // Remove from local IndexedDB once successfully uploaded to central server
-          await clientDeleteFile(token, fileRecord.id, true);
+          await clientDeleteFileDirect(fileRecord.id);
           syncedCount++;
         }
       } catch (e) {

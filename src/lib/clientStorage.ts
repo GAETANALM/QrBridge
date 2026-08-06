@@ -415,7 +415,11 @@ export async function clientGetFiles(token: string): Promise<FileMetadata[]> {
           }
           // Admin sees all files, users see their own
           if (currentUser.role === "admin") return true;
-          return record.ownerId === currentUser.id;
+          return (
+            (record.ownerId && record.ownerId === currentUser.id) ||
+            (record.ownerUsername && currentUser.username && record.ownerUsername.toLowerCase() === currentUser.username.toLowerCase()) ||
+            (!record.ownerId && !record.ownerUsername)
+          );
         })
         .map(({ content, ...metadata }) => metadata)
         .sort((a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime());

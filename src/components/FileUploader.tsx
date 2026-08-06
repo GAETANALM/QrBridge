@@ -153,60 +153,12 @@ export default function FileUploader({ onUploadSuccess }: FileUploaderProps) {
         className="hidden"
       />
       
-      <motion.div
-        id="uploader-container"
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
-        onClick={!isUploading ? triggerFileInput : undefined}
-        className={`relative border-2 border-dashed rounded-3xl p-6 sm:p-10 flex flex-col items-center justify-center cursor-pointer transition-all duration-300 ${
-          isDragging 
-            ? "border-emerald-500 bg-emerald-50/10" 
-            : "border-slate-700 bg-slate-900/40 hover:border-slate-500 hover:bg-slate-900/60"
-        } ${isUploading ? "pointer-events-none" : ""}`}
-        whileHover={!isUploading ? { scale: 1.002 } : {}}
-        whileTap={!isUploading ? { scale: 0.98 } : {}}
-      >
-        {isUploading ? (
-          <div className="flex flex-col items-center space-y-4 py-4 sm:py-6">
-            <Loader2 className="h-10 w-10 sm:h-12 sm:w-12 text-emerald-500 animate-spin" id="upload-spinner" />
-            <div className="text-center">
-              <p className="text-sm font-medium text-slate-200">Conversion et envoi du fichier...</p>
-              <p className="text-xs text-slate-400 mt-1">{uploadProgress}% complété</p>
-            </div>
-            <div className="w-56 sm:w-64 bg-slate-800 h-2.5 rounded-full overflow-hidden mt-2">
-              <motion.div 
-                className="bg-emerald-500 h-full rounded-full"
-                initial={{ width: 0 }}
-                animate={{ width: `${uploadProgress}%` }}
-                transition={{ duration: 0.2 }}
-              />
-            </div>
-          </div>
-        ) : (
-          <div className="flex flex-col items-center text-center space-y-3.5 py-2">
-            <div className="p-3.5 sm:p-4 bg-slate-800/80 rounded-2xl text-slate-300 ring-4 ring-slate-800/30">
-              <FileUp className="h-7 w-7 sm:h-8 sm:w-8 text-emerald-400" id="upload-icon" />
-            </div>
-            <div>
-              <p className="text-sm sm:text-base font-semibold text-slate-100">
-                <span className="hidden sm:inline">Glissez un fichier ici ou </span>
-                <span className="text-emerald-400 underline decoration-emerald-500/40 underline-offset-4 font-bold">Toucher pour choisir un fichier</span>
-              </p>
-              <p className="text-[11px] sm:text-xs text-slate-400 mt-1 font-medium">
-                Photos, vidéos, PDF, documents (max 45 Mo)
-              </p>
-            </div>
-          </div>
-        )}
-      </motion.div>
-
-      {/* Settings Container (Expiration & Custom Message) */}
+      {/* Settings Container (Expiration & Custom Message) - Placed above upload drop zone */}
       {!isUploading && (
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mt-3.5 bg-slate-900/40 border border-slate-800/70 rounded-2xl p-3.5 sm:p-5 space-y-4"
+          className="mb-3.5 bg-slate-900/40 border border-slate-800/70 rounded-2xl p-3.5 sm:p-5 space-y-4"
         >
           {/* Custom Message Field */}
           <div>
@@ -399,6 +351,55 @@ export default function FileUploader({ onUploadSuccess }: FileUploaderProps) {
           </div>
         </motion.div>
       )}
+
+      {/* Drag and Drop Zone */}
+      <motion.div
+        id="uploader-container"
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        onClick={!isUploading ? triggerFileInput : undefined}
+        className={`relative border-2 border-dashed rounded-3xl p-6 sm:p-10 flex flex-col items-center justify-center cursor-pointer transition-all duration-300 ${
+          isDragging 
+            ? "border-emerald-500 bg-emerald-50/10" 
+            : "border-slate-700 bg-slate-900/40 hover:border-slate-500 hover:bg-slate-900/60"
+        } ${isUploading ? "pointer-events-none" : ""}`}
+        whileHover={!isUploading ? { scale: 1.002 } : {}}
+        whileTap={!isUploading ? { scale: 0.98 } : {}}
+      >
+        {isUploading ? (
+          <div className="flex flex-col items-center space-y-4 py-4 sm:py-6">
+            <Loader2 className="h-10 w-10 sm:h-12 sm:w-12 text-emerald-500 animate-spin" id="upload-spinner" />
+            <div className="text-center">
+              <p className="text-sm font-medium text-slate-200">Conversion et envoi du fichier...</p>
+              <p className="text-xs text-slate-400 mt-1">{uploadProgress}% complété</p>
+            </div>
+            <div className="w-56 sm:w-64 bg-slate-800 h-2.5 rounded-full overflow-hidden mt-2">
+              <motion.div 
+                className="bg-emerald-500 h-full rounded-full"
+                initial={{ width: 0 }}
+                animate={{ width: `${uploadProgress}%` }}
+                transition={{ duration: 0.2 }}
+              />
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center text-center space-y-3.5 py-2">
+            <div className="p-3.5 sm:p-4 bg-slate-800/80 rounded-2xl text-slate-300 ring-4 ring-slate-800/30">
+              <FileUp className="h-7 w-7 sm:h-8 sm:w-8 text-emerald-400" id="upload-icon" />
+            </div>
+            <div>
+              <p className="text-sm sm:text-base font-semibold text-slate-100">
+                <span className="hidden sm:inline">Glissez un fichier ici ou </span>
+                <span className="text-emerald-400 underline decoration-emerald-500/40 underline-offset-4 font-bold">Toucher pour choisir un fichier</span>
+              </p>
+              <p className="text-[11px] sm:text-xs text-slate-400 mt-1 font-medium">
+                Photos, vidéos, PDF, documents (max 45 Mo)
+              </p>
+            </div>
+          </div>
+        )}
+      </motion.div>
 
       {error && (
         <motion.div

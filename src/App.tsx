@@ -44,6 +44,7 @@ export default function App() {
           localStorage.setItem("qr_drive_user", JSON.stringify(verifiedUser));
           // Auto sync any local offline files to central account
           await syncLocalFilesToServer(savedToken);
+          fetchFiles(savedToken);
         } catch (err) {
           // Token is stale or invalid - clean up local auth state silently
           localStorage.removeItem("qr_drive_token");
