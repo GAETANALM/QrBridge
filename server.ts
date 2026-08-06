@@ -1,11 +1,15 @@
 import express from "express";
 import path from "path";
 import fs from "fs";
+import compression from "compression";
 import { createServer as createViteServer } from "vite";
 
 const app = express();
 const PORT = 3000;
 const UPLOADS_DIR = path.join(process.cwd(), "uploads");
+
+// Enable response compression (gzip/deflate) to minimize payload sizes
+app.use(compression());
 
 // Ensure the uploads directory exists
 if (!fs.existsSync(UPLOADS_DIR)) {
@@ -886,17 +890,19 @@ app.get("/api/download/:id", async (req, res) => {
       fileId: id,
     });
 
-    // Serve binary file
-    const fileBuffer = await fs.promises.readFile(binPath);
+    // Get file size for Content-Length
+    const stat = await fs.promises.stat(binPath);
 
     // Set correct headers
     res.setHeader("Content-Type", metadata.type || "application/octet-stream");
     // Ensure filename is safely encoded for headers
     const safeName = encodeURIComponent(metadata.name).replace(/['()]/g, escape);
     res.setHeader("Content-Disposition", `attachment; filename*=UTF-8''${safeName}`);
-    res.setHeader("Content-Length", fileBuffer.length);
+    res.setHeader("Content-Length", stat.size);
 
-    res.send(fileBuffer);
+    // Stream binary file directly from disk to client socket (zero-buffer streaming)
+    const stream = fs.createReadStream(binPath);
+    stream.pipe(res);
   } catch (error) {
     console.error("Download error:", error);
     res.status(500).send("Erreur lors du téléchargement.");

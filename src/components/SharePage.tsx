@@ -17,6 +17,7 @@ export default function SharePage({ fileId, onGoToHome }: SharePageProps) {
 
   useEffect(() => {
     let isMounted = true;
+    let createdBlobUrl: string | null = null;
 
     async function loadFileData() {
       setLoading(true);
@@ -38,7 +39,6 @@ export default function SharePage({ fileId, onGoToHome }: SharePageProps) {
         setFile(metaRes.file);
 
         // Pre-fetch blob for media previews (image, audio, video) safely
-        // Do NOT fail the page if pre-fetching blob fails or if it's a binary archive
         if (
           metaRes.file.type.startsWith("image/") ||
           metaRes.file.type.startsWith("audio/") ||
@@ -47,6 +47,7 @@ export default function SharePage({ fileId, onGoToHome }: SharePageProps) {
           try {
             const downloadRes = await apiDownloadFile(fileId);
             if (isMounted && downloadRes.status === 200 && downloadRes.blobUrl) {
+              createdBlobUrl = downloadRes.blobUrl;
               setContentUrl(downloadRes.blobUrl);
             }
           } catch (blobErr) {
@@ -68,6 +69,9 @@ export default function SharePage({ fileId, onGoToHome }: SharePageProps) {
     loadFileData();
     return () => {
       isMounted = false;
+      if (createdBlobUrl && createdBlobUrl.startsWith("blob:")) {
+        URL.revokeObjectURL(createdBlobUrl);
+      }
     };
   }, [fileId]);
 
